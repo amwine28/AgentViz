@@ -68,7 +68,7 @@ export interface AgentNode {
   parent_id: string | null;
   status: AgentStatus;
   tool_calls: Array<{ call_id: string; name: string; args: Record<string, unknown>; result?: unknown; duration_ms?: number; pending: boolean }>;
-  logs: Array<{ content: string; level: string; timestamp: number }>;
+  logs: Array<{ content: string; level: "info" | "warn" | "error"; timestamp: number }>;
 }
 
 export interface MessageEdge {

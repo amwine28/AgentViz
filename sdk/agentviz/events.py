@@ -23,7 +23,7 @@ def _id() -> str:
 
 @dataclass
 class AgentSpawnEvent:
-    kind: EventKind = field(default="agent_spawn", init=False)
+    kind: Literal["agent_spawn"] = field(default="agent_spawn", init=False)
     agent_id: str = field(default_factory=_id)
     parent_id: str | None = None
     name: str = ""
@@ -31,14 +31,14 @@ class AgentSpawnEvent:
 
 @dataclass
 class AgentStatusEvent:
-    kind: EventKind = field(default="agent_status", init=False)
+    kind: Literal["agent_status"] = field(default="agent_status", init=False)
     agent_id: str = ""
     status: AgentStatus = "running"
     timestamp: float = field(default_factory=_now)
 
 @dataclass
 class ToolCallPendingEvent:
-    kind: EventKind = field(default="tool_call_pending", init=False)
+    kind: Literal["tool_call_pending"] = field(default="tool_call_pending", init=False)
     agent_id: str = ""
     call_id: str = field(default_factory=_id)
     name: str = ""
@@ -47,7 +47,7 @@ class ToolCallPendingEvent:
 
 @dataclass
 class ToolResultEvent:
-    kind: EventKind = field(default="tool_result", init=False)
+    kind: Literal["tool_result"] = field(default="tool_result", init=False)
     agent_id: str = ""
     call_id: str = ""
     result: Any = None
@@ -56,7 +56,7 @@ class ToolResultEvent:
 
 @dataclass
 class AgentMessageEvent:
-    kind: EventKind = field(default="agent_message", init=False)
+    kind: Literal["agent_message"] = field(default="agent_message", init=False)
     from_agent_id: str = ""
     to_agent_id: str = ""
     content: str = ""
@@ -64,7 +64,7 @@ class AgentMessageEvent:
 
 @dataclass
 class LogEvent:
-    kind: EventKind = field(default="log", init=False)
+    kind: Literal["log"] = field(default="log", init=False)
     agent_id: str = ""
     content: str = ""
     level: Literal["info", "warn", "error"] = "info"
@@ -72,7 +72,7 @@ class LogEvent:
 
 @dataclass
 class AgentCompleteEvent:
-    kind: EventKind = field(default="agent_complete", init=False)
+    kind: Literal["agent_complete"] = field(default="agent_complete", init=False)
     agent_id: str = ""
     exit_status: Literal["ok", "error", "stopped"] = "ok"
     summary: str = ""
