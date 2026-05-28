@@ -3,10 +3,12 @@ import { createRelay } from "../src/relay";
 
 describe("relay", () => {
   let relay: ReturnType<typeof createRelay>;
-  const PORT = 13333;
+  let port: number;
 
-  beforeEach(() => {
-    relay = createRelay(PORT);
+  beforeEach(async () => {
+    relay = createRelay(0);
+    await relay.ready;
+    port = relay.port();
   });
 
   afterEach((done) => {
@@ -14,8 +16,8 @@ describe("relay", () => {
   });
 
   test("fans SDK event out to browser client", (done) => {
-    const sdkWs = new WebSocket(`ws://localhost:${PORT}/sdk`);
-    const browserWs = new WebSocket(`ws://localhost:${PORT}/`);
+    const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
+    const browserWs = new WebSocket(`ws://localhost:${port}/`);
 
     browserWs.on("message", (data) => {
       const events = JSON.parse(data.toString());
@@ -33,8 +35,8 @@ describe("relay", () => {
   });
 
   test("routes command from browser to SDK client", (done) => {
-    const sdkWs = new WebSocket(`ws://localhost:${PORT}/sdk`);
-    const browserWs = new WebSocket(`ws://localhost:${PORT}/`);
+    const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
+    const browserWs = new WebSocket(`ws://localhost:${port}/`);
 
     sdkWs.on("message", (data) => {
       const cmd = JSON.parse(data.toString());
@@ -51,13 +53,13 @@ describe("relay", () => {
   });
 
   test("new browser client receives buffered events on connect", (done) => {
-    const sdkWs = new WebSocket(`ws://localhost:${PORT}/sdk`);
+    const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
 
     sdkWs.on("open", () => {
       sdkWs.send(JSON.stringify({ kind: "agent_spawn", agent_id: "a2", name: "buffered", parent_id: null, timestamp: Date.now() }));
 
       setTimeout(() => {
-        const lateBrowser = new WebSocket(`ws://localhost:${PORT}/`);
+        const lateBrowser = new WebSocket(`ws://localhost:${port}/`);
         lateBrowser.on("message", (data) => {
           const events = JSON.parse(data.toString());
           expect(Array.isArray(events)).toBe(true);

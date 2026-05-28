@@ -1,13 +1,17 @@
-import { WebSocketServer, WebSocket } from "ws";
-import { IncomingMessage } from "http";
+import { WebSocketServer, WebSocket, ServerOptions } from "ws";
+import { IncomingMessage, Server as HttpServer } from "http";
 import { SessionBuffer } from "./buffer";
 
-export function createRelay(port: number) {
+export function createRelay(portOrServer: number | HttpServer) {
   const buffer = new SessionBuffer();
   const sdkClients = new Set<WebSocket>();
   const browserClients = new Set<WebSocket>();
 
-  const wss = new WebSocketServer({ port });
+  const opts: ServerOptions = typeof portOrServer === "number"
+    ? { port: portOrServer }
+    : { server: portOrServer };
+
+  const wss = new WebSocketServer(opts);
 
   function isSdkPath(req: IncomingMessage): boolean {
     return req.url === "/sdk";
@@ -23,18 +27,19 @@ export function createRelay(port: number) {
           buffer.push(event);
           for (const browser of browserClients) {
             if (browser.readyState === WebSocket.OPEN) {
-              browser.send(JSON.stringify(event));
+              try { browser.send(JSON.stringify(event)); } catch { /* ignore closed socket */ }
             }
           }
         } catch { /* ignore malformed */ }
       });
 
       ws.on("close", () => sdkClients.delete(ws));
+      ws.on("error", () => sdkClients.delete(ws));
     } else {
       // Browser client — send buffer catch-up immediately
       const catchUp = buffer.all();
       if (catchUp.length > 0) {
-        ws.send(JSON.stringify(catchUp));
+        try { ws.send(JSON.stringify(catchUp)); } catch { /* ignore closed socket */ }
       }
       browserClients.add(ws);
 
@@ -45,17 +50,34 @@ export function createRelay(port: number) {
           const cmd = JSON.parse(data.toString());
           for (const sdk of sdkClients) {
             if (sdk.readyState === WebSocket.OPEN) {
-              sdk.send(JSON.stringify(cmd));
+              try { sdk.send(JSON.stringify(cmd)); } catch { /* ignore closed socket */ }
             }
           }
         } catch { /* ignore */ }
       });
 
       ws.on("close", () => browserClients.delete(ws));
+      ws.on("error", () => browserClients.delete(ws));
+    }
+  });
+
+  const ready = new Promise<void>((resolve) => {
+    // When attaching to an existing http.Server, the wss is already "listening"
+    // synchronously (no separate bind needed). When binding to a port, the
+    // underlying net.Server fires "listening" once the port is acquired.
+    if (typeof portOrServer !== "number") {
+      resolve();
+    } else {
+      wss.once("listening", resolve);
     }
   });
 
   return {
     close: (cb?: () => void) => wss.close(cb),
+    port: (): number => {
+      const addr = wss.address();
+      return addr && typeof addr === "object" ? addr.port : 0;
+    },
+    ready,
   };
 }
