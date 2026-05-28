@@ -1,10 +1,12 @@
 import asyncio
+import time
 from typing import TYPE_CHECKING
 from .events import (
     AgentSpawnEvent, AgentStatusEvent, AgentCompleteEvent,
+    ToolCallPendingEvent, ToolResultEvent,
     AgentStatus, serialize, _id
 )
-from .exceptions import AgentStopped
+from .exceptions import AgentStopped, ToolCallDenied
 
 if TYPE_CHECKING:
     from .relay_client import RelayClient
@@ -67,6 +69,39 @@ class Agent:
                 fut.set_result(True)
             else:
                 fut.set_exception(Exception(f"denied:{call_id}"))
+
+    async def tool_call(
+        self,
+        name: str,
+        args: dict,
+        fn: callable,
+        approval_timeout: float = 30.0,
+    ):
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        event = ToolCallPendingEvent(agent_id=self.agent_id, name=name, args=args)
+        call_id = event.call_id
+        self.register_pending_tool_call(call_id, future)
+
+        await self._relay.send(serialize(event))
+
+        try:
+            await asyncio.wait_for(asyncio.shield(future), timeout=approval_timeout)
+        except asyncio.TimeoutError:
+            self._pending_tool_calls.pop(call_id, None)
+            # auto-approve on timeout
+        except Exception as exc:
+            if "denied" in str(exc):
+                raise ToolCallDenied(call_id=call_id, tool_name=name)
+            raise
+
+        t0 = time.monotonic()
+        result = fn()
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        await self._relay.send(serialize(
+            ToolResultEvent(agent_id=self.agent_id, call_id=call_id, result=result, duration_ms=duration_ms)
+        ))
+        return result
 
     async def _emit_spawn(self) -> None:
         await self._relay.send(serialize(
