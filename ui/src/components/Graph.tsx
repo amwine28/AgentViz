@@ -26,7 +26,12 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> { type: "spawn" | "mes
 export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSelectEdge }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
+  // Tracks current node positions so we can seed them on re-render
+  const posMapRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  // Maps agent_id → circle element for fast selection highlighting
+  const circleMapRef = useRef<Map<string, SVGCircleElement>>(new Map());
 
+  // Effect 1: rebuild simulation when graph structure changes (NOT when selectedNodeId changes)
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -34,7 +39,12 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     const W = svg.clientWidth || 800;
     const H = svg.clientHeight || 600;
 
-    const nodes: SimNode[] = Object.values(agents).map((a) => ({ id: a.id, x: W / 2, y: H / 2 }));
+    // Seed positions from previous simulation run; new nodes start at center
+    const nodes: SimNode[] = Object.values(agents).map((a) => {
+      const prev = posMapRef.current.get(a.id);
+      return { id: a.id, x: prev?.x ?? W / 2, y: prev?.y ?? H / 2 };
+    });
+
     const spawnLinks: SimLink[] = Object.values(agents)
       .filter((a) => a.parent_id)
       .map((a) => ({ source: a.parent_id!, target: a.id, type: "spawn" as const }));
@@ -53,10 +63,9 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
 
     simRef.current = sim;
 
-    // Clear previous render
+    // Clear and rebuild SVG
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-    // Defs: arrow markers + animation
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     defs.innerHTML = `
       <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -75,7 +84,6 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     svg.appendChild(g);
 
-    // Edges
     const edgeEls: SVGLineElement[] = links.map((link) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       if (link.type === "spawn") {
@@ -91,14 +99,15 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
         line.style.cursor = "pointer";
         const src = typeof link.source === "string" ? link.source : (link.source as SimNode).id;
         const tgt = typeof link.target === "string" ? link.target : (link.target as SimNode).id;
-        const key = `${src}:${tgt}`;
-        line.addEventListener("click", () => onSelectEdge(key));
+        line.addEventListener("click", () => onSelectEdge(`${src}:${tgt}`));
       }
       g.appendChild(line);
       return line;
     });
 
-    // Nodes
+    // Rebuild circleMap for selection highlighting
+    circleMapRef.current.clear();
+
     const nodeEls = nodes.map((node) => {
       const agent = agents[node.id];
       const isRoot = !agent.parent_id;
@@ -113,6 +122,9 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
       circle.style.cursor = "pointer";
       circle.addEventListener("click", () => onSelectNode(node.id));
       g.appendChild(circle);
+
+      // Register for fast highlight updates
+      circleMapRef.current.set(node.id, circle);
 
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("text-anchor", "middle");
@@ -129,6 +141,8 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     sim.on("tick", () => {
       nodes.forEach((node, i) => {
         const { x = 0, y = 0 } = node;
+        // Save position for next render cycle
+        posMapRef.current.set(node.id, { x, y });
         nodeEls[i].circle.setAttribute("cx", String(x));
         nodeEls[i].circle.setAttribute("cy", String(y));
         nodeEls[i].label.setAttribute("x", String(x));
@@ -147,7 +161,16 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     });
 
     return () => { sim.stop(); };
-  }, [agents, messageEdges, selectedNodeId, onSelectNode, onSelectEdge]);
+  // selectedNodeId intentionally NOT in deps — handled by Effect 2
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents, messageEdges, onSelectNode, onSelectEdge]);
+
+  // Effect 2: update stroke-width on selection change WITHOUT restarting simulation
+  useEffect(() => {
+    for (const [id, circle] of circleMapRef.current) {
+      circle.setAttribute("stroke-width", id === selectedNodeId ? "3" : "1.5");
+    }
+  }, [selectedNodeId]);
 
   return (
     <svg

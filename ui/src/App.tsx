@@ -22,6 +22,9 @@ export function App() {
     sendRef.current?.(cmd);
   }, []);
 
+  const selectNode = useCallback((id: string | null) => dispatch({ type: "select_node", agent_id: id }), []);
+  const selectEdge = useCallback((key: string | null) => dispatch({ type: "select_edge", edge_key: key }), []);
+
   const runningCount = Object.values(state.agents).filter((a) => a.status === "running").length;
 
   return (
@@ -38,8 +41,8 @@ export function App() {
             agents={state.agents}
             messageEdges={state.messageEdges}
             selectedNodeId={state.selectedNodeId}
-            onSelectNode={(id) => dispatch({ type: "select_node", agent_id: id })}
-            onSelectEdge={(key) => dispatch({ type: "select_edge", edge_key: key })}
+            onSelectNode={selectNode}
+            onSelectEdge={selectEdge}
             onCommand={sendCommand}
           />
         </div>
