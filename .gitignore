@@ -8,3 +8,6 @@ build/
 *.egg
 .env
 node_modules/
+relay/dist/
+ui/dist/
+sdk/build/
