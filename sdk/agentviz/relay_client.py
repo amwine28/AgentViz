@@ -16,6 +16,7 @@ class RelayClient:
         self._listener_task: asyncio.Task | None = None
 
     def on_command(self, kind: str, handler: Callable[[dict], None]) -> None:
+        # handlers must be synchronous; async handlers will not be awaited
         self._handlers.setdefault(kind, []).append(handler)
 
     async def connect(self) -> None:
@@ -30,6 +31,7 @@ class RelayClient:
     async def close(self) -> None:
         if self._listener_task:
             self._listener_task.cancel()
+            await asyncio.gather(self._listener_task, return_exceptions=True)
         if self._ws:
             await self._ws.close()
 
