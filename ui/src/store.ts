@@ -65,7 +65,7 @@ function applyEvent(state: AppState, event: AgentVizEvent): AppState {
       if (!agent) return state;
       return {
         ...state,
-        agents: { ...state.agents, [event.agent_id]: { ...agent, status: event.status as AgentStatus } },
+        agents: { ...state.agents, [event.agent_id]: { ...agent, status: event.status } },
       };
     }
     case "tool_call_pending": {
