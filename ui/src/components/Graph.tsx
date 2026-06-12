@@ -12,16 +12,16 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  running: "#60a5fa",
-  waiting: "#f59e0b",
-  complete: "#34d399",
-  error: "#f87171",
-  paused: "#f59e0b",
+  running: "#3fe0ff",
+  waiting: "#ffb454",
+  complete: "#6ef7a0",
+  error: "#ff5277",
+  paused: "#8b9bb4",
 };
-const ROOT_COLOR = "#a78bfa";
+const ROOT_COLOR = "#7daaff";
 
 interface SimNode extends d3.SimulationNodeDatum { id: string }
-interface SimLink extends d3.SimulationLinkDatum<SimNode> { type: "spawn" | "message" }
+interface SimLink extends d3.SimulationLinkDatum<SimNode> { type: "spawn" | "message"; weight: number }
 
 export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSelectEdge }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -46,13 +46,26 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     });
 
     const spawnLinks: SimLink[] = Object.values(agents)
-      .filter((a) => a.parent_id)
-      .map((a) => ({ source: a.parent_id!, target: a.id, type: "spawn" as const }));
-    const msgLinks: SimLink[] = Object.keys(messageEdges).map((key) => {
-      const [from, to] = key.split(":");
-      return { source: from, target: to, type: "message" as const };
-    });
+      .filter((a) => a.parent_id && agents[a.parent_id])
+      .map((a) => ({ source: a.parent_id!, target: a.id, type: "spawn" as const, weight: 1 }));
+    const msgLinks: SimLink[] = Object.entries(messageEdges)
+      .filter(([key]) => {
+        const [from, to] = key.split(":");
+        return from !== to && agents[from] && agents[to];
+      })
+      .map(([key, edge]) => {
+        const [from, to] = key.split(":");
+        return { source: from, target: to, type: "message" as const, weight: edge.messages.length };
+      });
     const links = [...spawnLinks, ...msgLinks];
+
+    /* activity per agent — drives node radius (structure at a glance) */
+    const activity = new Map<string, number>();
+    for (const a of Object.values(agents)) activity.set(a.id, a.tool_calls.length);
+    for (const e of Object.values(messageEdges)) {
+      activity.set(e.from_agent_id, (activity.get(e.from_agent_id) ?? 0) + e.messages.length);
+      activity.set(e.to_agent_id, (activity.get(e.to_agent_id) ?? 0) + e.messages.length);
+    }
 
     if (simRef.current) simRef.current.stop();
 
@@ -69,10 +82,10 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     defs.innerHTML = `
       <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L6,3 z" fill="#2d2d4e"/>
+        <path d="M0,0 L0,6 L6,3 z" fill="#33415c"/>
       </marker>
       <marker id="arrow-msg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L6,3 z" fill="#a78bfa"/>
+        <path d="M0,0 L0,6 L6,3 z" fill="#3fe0ff"/>
       </marker>
       <style>
         @keyframes dash { to { stroke-dashoffset: -16; } }
@@ -87,12 +100,14 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     const edgeEls: SVGLineElement[] = links.map((link) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       if (link.type === "spawn") {
-        line.setAttribute("stroke", "#2d2d4e");
-        line.setAttribute("stroke-width", "1.5");
+        line.setAttribute("stroke", "#33415c");
+        line.setAttribute("stroke-width", "1.2");
         line.setAttribute("marker-end", "url(#arrow)");
       } else {
-        line.setAttribute("stroke", "#a78bfa");
-        line.setAttribute("stroke-width", "1.5");
+        // edge weight = message volume; thickness makes the busy paths obvious
+        line.setAttribute("stroke", "#3fe0ff");
+        line.setAttribute("stroke-opacity", "0.7");
+        line.setAttribute("stroke-width", String(Math.min(1 + Math.sqrt(link.weight), 6)));
         line.setAttribute("stroke-dasharray", "5 4");
         line.setAttribute("marker-end", "url(#arrow-msg)");
         line.setAttribute("class", "msg-edge");
@@ -111,12 +126,13 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     const nodeEls = nodes.map((node) => {
       const agent = agents[node.id];
       const isRoot = !agent.parent_id;
-      const color = isRoot ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? "#888");
-      const r = isRoot ? 20 : 14;
+      const color = isRoot ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? "#8b9bb4");
+      // radius encodes activity (tool calls + messages), root gets a floor bump
+      const r = Math.min((isRoot ? 14 : 10) + 2 * Math.sqrt(activity.get(node.id) ?? 0), 30);
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("r", String(r));
-      circle.setAttribute("fill", "#1a1a2e");
+      circle.setAttribute("fill", "#0a1020");
       circle.setAttribute("stroke", color);
       circle.setAttribute("stroke-width", selectedNodeId === node.id ? "3" : "1.5");
       circle.style.cursor = "pointer";
@@ -129,8 +145,9 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("text-anchor", "middle");
       label.setAttribute("dy", String(r + 14));
-      label.setAttribute("fill", "#aaa");
+      label.setAttribute("fill", "#8fa3c4");
       label.setAttribute("font-size", "10");
+      label.setAttribute("font-family", "IBM Plex Mono, monospace");
       label.setAttribute("pointer-events", "none");
       label.textContent = agent.name;
       g.appendChild(label);
@@ -175,7 +192,7 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
   return (
     <svg
       ref={svgRef}
-      style={{ width: "100%", height: "100%", background: "#0d0d14" }}
+      style={{ width: "100%", height: "100%", background: "transparent" }}
     />
   );
 }

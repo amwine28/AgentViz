@@ -563,6 +563,46 @@ textarea, input { cursor: text; }
   letter-spacing: 0.1em;
 }
 
+/* ---- Graph stats (the mathematical map) -------------------------- */
+
+.graph-stats {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 240px;
+  z-index: 35;
+}
+.stats-export { padding: 2px 8px; font-size: 9px; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(125, 170, 255, 0.07);
+}
+.stat.wide { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
+.stat .k {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.stat .v {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.hub { color: var(--c-run); font-size: 12px; }
+.stat .v.bottleneck { color: var(--c-wait); font-size: 12px; }
+.stat .v.isolates { color: var(--c-err); font-size: 11px; }
+
 /* ---- Empty state ------------------------------------------------ */
 
 .empty-state {

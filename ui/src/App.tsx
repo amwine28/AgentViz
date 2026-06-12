@@ -9,6 +9,7 @@ import { MessageThread } from "./components/MessageThread";
 import { TopBar } from "./components/TopBar";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
+import { GraphStats } from "./components/GraphStats";
 
 // Served by the relay itself in production, so the ws port is our own port.
 // Vite dev server is the only case where we fall back to the default.
@@ -118,6 +119,8 @@ export function App() {
             onClose={() => selectEdge(null)}
           />
         )}
+
+        {view === "2d" && <GraphStats state={state} />}
 
         <ApprovalQueue agents={state.agents} acks={state.acks} onCommand={sendCommand} />
 
