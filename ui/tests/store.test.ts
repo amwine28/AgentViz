@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { reducer, initialState } from "../src/store";
-import type { AgentSpawnEvent, AgentStatusEvent, ToolCallPendingEvent, AgentMessageEvent, ToolResultEvent, AgentCompleteEvent } from "../src/types";
+import type { AgentSpawnEvent, AgentStatusEvent, ToolCallPendingEvent, AgentMessageEvent, ToolResultEvent, ToolDeniedEvent, AgentCompleteEvent } from "../src/types";
 
 describe("store reducer", () => {
   test("agent_spawn adds node", () => {
@@ -60,6 +60,17 @@ describe("store reducer", () => {
     expect(state.agents["a1"].tool_calls[0].duration_ms).toBe(42);
   });
 
+  test("tool_denied resolves pending tool call with denial reason", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "orch", timestamp: 1 };
+    const toolCall: ToolCallPendingEvent = { kind: "tool_call_pending", agent_id: "a1", call_id: "c1", name: "my_tool", args: {}, timestamp: 2 };
+    const denied: ToolDeniedEvent = { kind: "tool_denied", agent_id: "a1", call_id: "c1", name: "my_tool", reason: "timeout", timestamp: 3 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: toolCall });
+    state = reducer(state, { type: "event", event: denied });
+    expect(state.agents["a1"].tool_calls[0].pending).toBe(false);
+    expect(state.agents["a1"].tool_calls[0].denied).toBe("timeout");
+  });
+
   test("agent_complete ok maps to complete status", () => {
     const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "orch", timestamp: 1 };
     const complete: AgentCompleteEvent = { kind: "agent_complete", agent_id: "a1", exit_status: "ok", summary: "", timestamp: 2 };
@@ -89,5 +100,57 @@ describe("store reducer", () => {
     state = reducer(state, { type: "select_node", agent_id: "a1" });
     expect(state.selectedNodeId).toBe("a1");
     expect(state.selectedEdgeKey).toBeNull();
+  });
+
+  test("seq gap increments droppedCount", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1, seq: 0 };
+    const log1 = { kind: "log" as const, agent_id: "a1", content: "one", level: "info" as const, timestamp: 2, seq: 1 };
+    const log4 = { kind: "log" as const, agent_id: "a1", content: "four", level: "info" as const, timestamp: 3, seq: 4 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: log1 });
+    expect(state.droppedCount).toBe(0);
+    state = reducer(state, { type: "event", event: log4 });
+    expect(state.droppedCount).toBe(2); // seq 2 and 3 missing
+  });
+
+  test("contiguous seqs do not increment droppedCount", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1, seq: 0 };
+    const log1 = { kind: "log" as const, agent_id: "a1", content: "one", level: "info" as const, timestamp: 2, seq: 1 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: log1 });
+    expect(state.droppedCount).toBe(0);
+    expect(state.eventCount).toBe(2);
+  });
+
+  test("session_start resets agents and sets session name", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "ghost", parent_id: null, name: "old", timestamp: 1 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "connected", value: true });
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh-run", timestamp: 2 } });
+    expect(Object.keys(state.agents)).toHaveLength(0);
+    expect(state.sessionName).toBe("fresh-run");
+    expect(state.connected).toBe(true); // connection survives session reset
+  });
+
+  test("command_ack records status by cmd_id", () => {
+    const state = reducer(initialState, { type: "event", event: { kind: "command_ack", cmd_id: "c-9", status: "applied", timestamp: 1 } });
+    expect(state.acks["c-9"]).toBe("applied");
+  });
+
+  test("timeline records narrative events in order", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
+    const msg: AgentMessageEvent = { kind: "agent_message", from_agent_id: "a1", to_agent_id: "a2", content: "hi", timestamp: 2 };
+    const ack = { kind: "command_ack" as const, cmd_id: "c", status: "applied" as const, timestamp: 3 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: msg });
+    state = reducer(state, { type: "event", event: ack });
+    expect(state.timeline.map((e) => e.kind)).toEqual(["agent_spawn", "agent_message"]); // acks are plumbing, not narrative
+  });
+
+  test("timeline resets on session_start", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
+    expect(state.timeline).toHaveLength(0);
   });
 });

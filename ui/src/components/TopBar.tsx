@@ -1,35 +1,51 @@
-import type React from "react";
-
 interface Props {
   connected: boolean;
+  sessionName: string;
   runningCount: number;
+  agentCount: number;
+  eventCount: number;
+  droppedCount: number;
+  view: "3d" | "2d" | "flow";
+  onSetView: (v: "3d" | "2d" | "flow") => void;
   onPauseAll: () => void;
   onStopAll: () => void;
 }
 
-export function TopBar({ connected, runningCount, onPauseAll, onStopAll }: Props) {
+export function TopBar({
+  connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
+  view, onSetView, onPauseAll, onStopAll,
+}: Props) {
   return (
-    <div style={{
-      height: 40, background: "#111120", borderBottom: "1px solid #1e1e30",
-      display: "flex", alignItems: "center", padding: "0 16px", gap: 16
-    }}>
-      <span style={{ color: "#a78bfa", fontWeight: 700, fontSize: 13 }}>AgentViz</span>
-      <span style={{ color: "#555", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{
-          display: "inline-block", width: 7, height: 7, borderRadius: "50%",
-          background: connected ? "#34d399" : "#555",
-          boxShadow: connected ? "0 0 6px #34d39988" : "none",
-        }} />
-        {connected ? `${runningCount} agent${runningCount !== 1 ? "s" : ""} running` : "disconnected"}
-      </span>
-      <div style={{ flex: 1 }} />
-      <button onClick={onPauseAll} style={btnStyle}>Pause All</button>
-      <button onClick={onStopAll} style={{ ...btnStyle, color: "#f87171", borderColor: "#f8717155" }}>Stop All</button>
+    <div className="topbar">
+      <div className="brand">AGENT<b>VIZ</b></div>
+      {sessionName && <div className="session-name">{sessionName}</div>}
+
+      <div className="tb-stat">
+        <span className={`led ${connected ? "on" : ""}`} />
+        {connected ? "link" : "no link"}
+      </div>
+
+      <div className="topbar-spacer" />
+
+      {droppedCount > 0 && (
+        <div className="dropped-chip">⚠ {droppedCount} events dropped</div>
+      )}
+
+      <div className="tb-stat"><span className="num">{runningCount}</span> running</div>
+      <div className="tb-stat"><span className="num">{agentCount}</span> agents</div>
+      <div className="tb-stat"><span className="num">{eventCount.toLocaleString()}</span> events</div>
+
+      <button className="hud-btn" onClick={onPauseAll}>Pause all</button>
+      <button className="hud-btn danger" onClick={onStopAll}>Stop all</button>
+
+      <div className="view-toggle">
+        <button className={view === "3d" ? "active" : ""} onClick={() => onSetView("3d")}>3D</button>
+        <div className="divider" />
+        <button className={view === "2d" ? "active" : ""} onClick={() => onSetView("2d")}>2D</button>
+        <div className="divider" />
+        <button className={view === "flow" ? "active" : ""} onClick={() => onSetView("flow")}>FLOW</button>
+      </div>
+      <span className="hotkey-hint">[V]</span>
     </div>
   );
 }
-
-const btnStyle: React.CSSProperties = {
-  background: "#1e1e30", border: "1px solid #2d2d4e", color: "#888",
-  borderRadius: 5, padding: "4px 10px", fontSize: 11, cursor: "pointer"
-};

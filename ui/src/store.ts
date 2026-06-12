@@ -9,6 +9,11 @@ export interface AppState {
   selectedEdgeKey: string | null;
   sessionName: string;
   connected: boolean;
+  eventCount: number;
+  droppedCount: number;
+  lastSeq: Record<string, number>; // per-agent sequence tracking for gap detection
+  acks: Record<string, "applied" | "failed">;
+  timeline: AgentVizEvent[]; // narrative events in arrival order, for the FLOW view
 }
 
 export const initialState: AppState = {
@@ -18,7 +23,18 @@ export const initialState: AppState = {
   selectedEdgeKey: null,
   sessionName: "",
   connected: false,
+  eventCount: 0,
+  droppedCount: 0,
+  lastSeq: {},
+  acks: {},
+  timeline: [],
 };
+
+const TIMELINE_CAP = 5000;
+const NARRATIVE_KINDS = new Set<string>([
+  "agent_spawn", "agent_message", "tool_call_pending", "tool_result",
+  "tool_denied", "log", "agent_complete",
+]);
 
 type Action =
   | { type: "event"; event: AgentVizEvent }
@@ -47,8 +63,39 @@ export function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-function applyEvent(state: AppState, event: AgentVizEvent): AppState {
+function trackSeq(state: AppState, event: AgentVizEvent): AppState {
+  const e = event as AgentVizEvent & { agent_id?: string; from_agent_id?: string };
+  const next = { ...state, eventCount: state.eventCount + 1 };
+  if (typeof event.seq !== "number") return next;
+  const key = e.agent_id ?? e.from_agent_id ?? "_session";
+  const last = state.lastSeq[key];
+  const gap = last !== undefined && event.seq > last + 1 ? event.seq - last - 1 : 0;
+  return {
+    ...next,
+    droppedCount: next.droppedCount + gap,
+    lastSeq: { ...next.lastSeq, [key]: Math.max(event.seq, last ?? -1) },
+  };
+}
+
+function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
+  let state = trackSeq(rawState, event);
+  if (NARRATIVE_KINDS.has(event.kind)) {
+    const timeline = state.timeline.length >= TIMELINE_CAP
+      ? [...state.timeline.slice(-(TIMELINE_CAP - 1)), event]
+      : [...state.timeline, event];
+    state = { ...state, timeline };
+  }
   switch (event.kind) {
+    case "session_start":
+      // New session owns the canvas: drop prior agents/edges, keep connection.
+      return {
+        ...initialState,
+        connected: state.connected,
+        sessionName: event.name,
+        eventCount: 1,
+      };
+    case "command_ack":
+      return { ...state, acks: { ...state.acks, [event.cmd_id]: event.status } };
     case "agent_spawn": {
       const node: AgentNode = {
         id: event.agent_id,
@@ -71,7 +118,10 @@ function applyEvent(state: AppState, event: AgentVizEvent): AppState {
     case "tool_call_pending": {
       const agent = state.agents[event.agent_id];
       if (!agent) return state;
-      const tc = { call_id: event.call_id, name: event.name, args: event.args, pending: true };
+      const tc = {
+        call_id: event.call_id, name: event.name, args: event.args, pending: true,
+        requested_at: event.timestamp, timeout_s: event.timeout_s,
+      };
       return {
         ...state,
         agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: [...agent.tool_calls, tc] } },
@@ -83,6 +133,16 @@ function applyEvent(state: AppState, event: AgentVizEvent): AppState {
       const updated = agent.tool_calls.map((tc) =>
         tc.call_id === event.call_id
           ? { ...tc, pending: false, result: event.result, duration_ms: event.duration_ms }
+          : tc
+      );
+      return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: updated } } };
+    }
+    case "tool_denied": {
+      const agent = state.agents[event.agent_id];
+      if (!agent) return state;
+      const updated = agent.tool_calls.map((tc) =>
+        tc.call_id === event.call_id
+          ? { ...tc, pending: false, denied: event.reason }
           : tc
       );
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: updated } } };
