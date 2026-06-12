@@ -136,9 +136,9 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
         group.add(core);
 
         const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: haloTexRef.current!, color, transparent: true, opacity: 0.28, depthWrite: false,
+          map: haloTexRef.current!, color, transparent: true, opacity: 0.18, depthWrite: false,
         }));
-        halo.scale.set(11, 11, 1);
+        halo.scale.set(9, 9, 1);
         group.add(halo);
 
         const ring = new THREE.Mesh(
@@ -178,7 +178,7 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
 
     /* bloom — the glow that makes it cinematic */
     const bloom = new UnrealBloomPass(
-      new THREE.Vector2(el.clientWidth, el.clientHeight), 0.45, 0.3, 0.2
+      new THREE.Vector2(el.clientWidth, el.clientHeight), 0.3, 0.25, 0.35
     );
     graph.postProcessingComposer().addPass(bloom);
 
@@ -204,7 +204,7 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
           v.ring.lookAt(cam.position);
         }
         if (v.status === "running") {
-          const hs = 11 + 1.3 * Math.sin(t * 2.1);
+          const hs = 9 + 1.1 * Math.sin(t * 2.1);
           v.halo.scale.set(hs, hs, 1);
         }
       }
@@ -284,7 +284,7 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
         const color = new THREE.Color(STATUS_COLOR[a.status] ?? "#8b9bb4");
         v.core.material.color = color;
         v.halo.material.color = color;
-        if (a.status !== "running") v.halo.scale.set(11, 11, 1);
+        if (a.status !== "running") v.halo.scale.set(9, 9, 1);
       }
     }
 
