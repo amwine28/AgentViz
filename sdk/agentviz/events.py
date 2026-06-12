@@ -4,8 +4,9 @@ import time
 import uuid
 
 EventKind = Literal[
-    "agent_spawn", "agent_status", "tool_call_pending",
-    "tool_result", "agent_message", "log", "agent_complete"
+    "session_start", "agent_spawn", "agent_status", "tool_call_pending",
+    "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
+    "command_ack"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
@@ -20,6 +21,19 @@ def _now() -> float:
 def _id() -> str:
     return str(uuid.uuid4())
 
+
+@dataclass
+class SessionStartEvent:
+    kind: Literal["session_start"] = field(default="session_start", init=False)
+    name: str = ""
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class CommandAckEvent:
+    kind: Literal["command_ack"] = field(default="command_ack", init=False)
+    cmd_id: str = ""
+    status: Literal["applied", "failed"] = "applied"
+    timestamp: float = field(default_factory=_now)
 
 @dataclass
 class AgentSpawnEvent:
@@ -43,6 +57,7 @@ class ToolCallPendingEvent:
     call_id: str = field(default_factory=_id)
     name: str = ""
     args: dict[str, Any] = field(default_factory=dict)
+    timeout_s: float = 30.0
     timestamp: float = field(default_factory=_now)
 
 @dataclass
@@ -52,6 +67,15 @@ class ToolResultEvent:
     call_id: str = ""
     result: Any = None
     duration_ms: int = 0
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class ToolDeniedEvent:
+    kind: Literal["tool_denied"] = field(default="tool_denied", init=False)
+    agent_id: str = ""
+    call_id: str = ""
+    name: str = ""
+    reason: Literal["denied", "timeout"] = "denied"
     timestamp: float = field(default_factory=_now)
 
 @dataclass

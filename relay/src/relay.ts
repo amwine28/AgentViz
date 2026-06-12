@@ -13,6 +13,11 @@ export function createRelay(portOrServer: number | HttpServer) {
 
   const wss = new WebSocketServer(opts);
 
+  // When attached to an http.Server, ws re-emits server errors (e.g.
+  // EADDRINUSE) on the wss; without a listener that crashes the process
+  // before the http server's own error handler can fall back to another port.
+  wss.on("error", () => { /* handled by the owning http server */ });
+
   function isSdkPath(req: IncomingMessage): boolean {
     return req.url === "/sdk";
   }
@@ -24,6 +29,11 @@ export function createRelay(portOrServer: number | HttpServer) {
       ws.on("message", (data) => {
         try {
           const event = JSON.parse(data.toString());
+          // A new session owns the buffer — prevents ghost events from
+          // previous runs replaying into freshly connected browsers.
+          if (event && event.kind === "session_start") {
+            buffer.clear();
+          }
           buffer.push(event);
           for (const browser of browserClients) {
             if (browser.readyState === WebSocket.OPEN) {

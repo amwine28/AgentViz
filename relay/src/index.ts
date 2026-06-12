@@ -1,10 +1,13 @@
 import * as http from "http";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { createRelay } from "./relay";
 
-const PORT = parseInt(process.env.AGENTVIZ_PORT ?? "3333", 10);
+const PREFERRED_PORT = parseInt(process.env.AGENTVIZ_PORT ?? "3333", 10);
 const UI_DIST = path.resolve(__dirname, "../../ui/dist");
+const PORT_FILE_DIR = path.join(os.homedir(), ".agentviz");
+const PORT_FILE = path.join(PORT_FILE_DIR, "relay.json");
 
 const MIME: Record<string, string> = {
   ".js": "application/javascript",
@@ -72,7 +75,44 @@ const server = http.createServer((req, res) => {
 
 createRelay(server);
 
-server.listen(PORT, () => {
-  console.log(`AgentViz relay running on http://localhost:${PORT}`);
-  console.log(`Open http://localhost:${PORT} in your browser`);
+function writePortFile(port: number): void {
+  try {
+    fs.mkdirSync(PORT_FILE_DIR, { recursive: true });
+    fs.writeFileSync(PORT_FILE, JSON.stringify({ port, pid: process.pid, started_at: Date.now() }));
+  } catch (e) {
+    console.error("Could not write port file:", e);
+  }
+}
+
+let announced = false;
+function onListening(): void {
+  if (announced) return;
+  announced = true;
+  const addr = server.address();
+  const port = addr && typeof addr === "object" ? addr.port : PREFERRED_PORT;
+  writePortFile(port);
+  console.log(`AgentViz relay running on http://localhost:${port}`);
+  console.log(`Open http://localhost:${port} in your browser`);
+}
+
+// Preferred port taken? Fall back to an ephemeral one — hardcoding 3333 is a bug.
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.log(`Port ${PREFERRED_PORT} in use, selecting a free port...`);
+    server.listen(0, onListening);
+  } else {
+    throw err;
+  }
 });
+
+function cleanup(): void {
+  try {
+    const info = JSON.parse(fs.readFileSync(PORT_FILE, "utf8"));
+    if (info.pid === process.pid) fs.unlinkSync(PORT_FILE);
+  } catch { /* nothing to clean */ }
+  process.exit(0);
+}
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
+
+server.listen(PREFERRED_PORT, onListening);

@@ -1,13 +1,13 @@
 """
 Minimal AgentViz smoke test.
-Run: python examples/basic_run.py
+Run: python3 examples/basic_run.py
 Then open http://localhost:3333 in your browser.
 """
 import asyncio
 import sys
 sys.path.insert(0, "sdk")
 
-from agentviz import session
+from agentviz import session, ToolCallDenied
 
 async def main():
     s = session(name="smoke-test")
@@ -19,14 +19,19 @@ async def main():
 
         async with s.agent("worker-a", parent_id=orch.agent_id) as worker:
             await worker.set_status("waiting")
-            result = await worker.tool_call(
-                name="fetch_data",
-                args={"source": "api"},
-                fn=lambda: {"rows": 42},
-                approval_timeout=30.0,
-            )
-            print(f"Tool result: {result}")
-            await s.send_message("worker-a", "orchestrator", f"Fetched {result['rows']} rows.")
+            print("Waiting for tool approval in the browser (denies after 30s)...")
+            try:
+                result = await worker.tool_call(
+                    name="fetch_data",
+                    args={"source": "api"},
+                    fn=lambda: {"rows": 42},
+                    approval_timeout=30.0,
+                )
+                print(f"Tool result: {result}")
+                await s.send_message("worker-a", "orchestrator", f"Fetched {result['rows']} rows.")
+            except ToolCallDenied:
+                print("Tool call denied (no approval within timeout).")
+                await worker.set_status("running")
 
         async with s.agent("worker-b", parent_id=orch.agent_id):
             await asyncio.sleep(1)

@@ -52,6 +52,51 @@ describe("relay", () => {
     });
   });
 
+  test("session_start clears the buffer so new sessions have no ghost events", (done) => {
+    const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
+
+    sdkWs.on("open", () => {
+      sdkWs.send(JSON.stringify({ kind: "agent_spawn", agent_id: "old-ghost", name: "stale", parent_id: null, timestamp: 1 }));
+      setTimeout(() => {
+        sdkWs.send(JSON.stringify({ kind: "session_start", name: "fresh", timestamp: 2 }));
+        setTimeout(() => {
+          const lateBrowser = new WebSocket(`ws://localhost:${port}/`);
+          lateBrowser.on("message", (data) => {
+            const events = JSON.parse(data.toString());
+            expect(Array.isArray(events)).toBe(true);
+            expect(events.some((e: { agent_id?: string }) => e.agent_id === "old-ghost")).toBe(false);
+            expect(events.some((e: { kind: string }) => e.kind === "session_start")).toBe(true);
+            lateBrowser.close();
+            sdkWs.close();
+            done();
+          });
+        }, 50);
+      }, 50);
+    });
+  });
+
+  test("buffer holds a normal run without dropping (5000 events)", (done) => {
+    const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
+
+    sdkWs.on("open", () => {
+      for (let i = 0; i < 5000; i++) {
+        sdkWs.send(JSON.stringify({ kind: "log", agent_id: "a1", content: `e${i}`, level: "info", timestamp: i, seq: i }));
+      }
+      setTimeout(() => {
+        const lateBrowser = new WebSocket(`ws://localhost:${port}/`);
+        lateBrowser.on("message", (data) => {
+          const events = JSON.parse(data.toString());
+          expect(events.length).toBe(5000);
+          expect(events[0].content).toBe("e0");
+          expect(events[4999].content).toBe("e4999");
+          lateBrowser.close();
+          sdkWs.close();
+          done();
+        });
+      }, 300);
+    });
+  }, 15000);
+
   test("new browser client receives buffered events on connect", (done) => {
     const sdkWs = new WebSocket(`ws://localhost:${port}/sdk`);
 

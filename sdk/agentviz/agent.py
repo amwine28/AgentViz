@@ -1,10 +1,11 @@
 import asyncio
+import inspect
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from .events import (
     AgentSpawnEvent, AgentStatusEvent, AgentCompleteEvent,
-    ToolCallPendingEvent, ToolResultEvent,
+    ToolCallPendingEvent, ToolResultEvent, ToolDeniedEvent, LogEvent,
     AgentStatus, serialize, _id
 )
 from .exceptions import AgentStopped, ToolCallDenied
@@ -47,33 +48,55 @@ class Agent:
         if self._stopped:
             raise AgentStopped(self.agent_id)
 
-    def _on_pause(self, cmd: dict) -> None:
+    def _on_pause(self, cmd: dict) -> bool:
         if cmd.get("agent_id") in (self.agent_id, None):
             self._paused.clear()
+            return True
+        return False
 
-    def _on_resume(self, cmd: dict) -> None:
+    def _on_resume(self, cmd: dict) -> bool:
         if cmd.get("agent_id") in (self.agent_id, None):
             self._paused.set()
+            return True
+        return False
 
-    def _on_stop(self, cmd: dict) -> None:
+    def _on_stop(self, cmd: dict) -> bool:
         if cmd.get("agent_id") in (self.agent_id, None):
             self._stopped = True
             self._paused.set()
+            return True
+        return False
 
-    def _on_inject(self, cmd: dict) -> None:
+    def _on_inject(self, cmd: dict) -> bool:
         if cmd.get("agent_id") in (self.agent_id, None):
             self.injected_messages.put_nowait(cmd.get("content", ""))
+            return True
+        return False
 
     def register_pending_tool_call(self, call_id: str, future: asyncio.Future) -> None:
         self._pending_tool_calls[call_id] = future
 
-    def resolve_tool_call(self, call_id: str, approved: bool) -> None:
+    def resolve_tool_call(self, call_id: str, approved: bool) -> bool:
         fut = self._pending_tool_calls.pop(call_id, None)
         if fut and not fut.done():
             if approved:
                 fut.set_result(True)
             else:
                 fut.set_exception(_ToolDenied(call_id))
+            return True
+        return False
+
+    async def log(self, content: str, level: Literal["info", "warn", "error"] = "info") -> None:
+        await self._relay.send(serialize(
+            LogEvent(agent_id=self.agent_id, content=content, level=level)
+        ))
+
+    async def _emit_tool_denied(
+        self, call_id: str, name: str, reason: Literal["denied", "timeout"]
+    ) -> None:
+        await self._relay.send(serialize(
+            ToolDeniedEvent(agent_id=self.agent_id, call_id=call_id, name=name, reason=reason)
+        ))
 
     async def tool_call(
         self,
@@ -81,10 +104,13 @@ class Agent:
         args: dict,
         fn: Callable[[], Any],
         approval_timeout: float = 30.0,
+        on_timeout: Literal["deny", "approve"] = "deny",
     ) -> Any:
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
-        event = ToolCallPendingEvent(agent_id=self.agent_id, name=name, args=args)
+        event = ToolCallPendingEvent(
+            agent_id=self.agent_id, name=name, args=args, timeout_s=approval_timeout
+        )
         call_id = event.call_id
         self.register_pending_tool_call(call_id, future)
 
@@ -94,12 +120,17 @@ class Agent:
             await asyncio.wait_for(future, timeout=approval_timeout)
         except asyncio.TimeoutError:
             self._pending_tool_calls.pop(call_id, None)
-            # auto-approve on timeout
+            if on_timeout == "deny":
+                await self._emit_tool_denied(call_id, name, reason="timeout")
+                raise ToolCallDenied(call_id=call_id, tool_name=name)
         except _ToolDenied:
+            await self._emit_tool_denied(call_id, name, reason="denied")
             raise ToolCallDenied(call_id=call_id, tool_name=name)
 
         t0 = time.monotonic()
         result = fn()
+        if inspect.isawaitable(result):
+            result = await result
         duration_ms = int((time.monotonic() - t0) * 1000)
         await self._relay.send(serialize(
             ToolResultEvent(agent_id=self.agent_id, call_id=call_id, result=result, duration_ms=duration_ms)

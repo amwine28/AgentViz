@@ -2,7 +2,7 @@ export class SessionBuffer {
   private events: unknown[] = [];
   private maxSize: number;
 
-  constructor(maxSize = 1000) {
+  constructor(maxSize = 50_000) {
     this.maxSize = maxSize;
   }
 
