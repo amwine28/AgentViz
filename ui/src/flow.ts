@@ -60,3 +60,54 @@ export function buildFlowLayout(timeline: AgentVizEvent[]): FlowLayout {
 
   return { lanes, rows };
 }
+
+/* ---- collapsible sections: long same-lane runs fold into one row ---- */
+
+const GROUPABLE = new Set(["log", "tool_call_pending", "tool_result", "tool_denied"]);
+
+export type FlowDisplayRow =
+  | { type: "row"; row: FlowRow }
+  | { type: "section"; key: string; lane: number; rows: FlowRow[] };
+
+/** Collapse consecutive runs of ≥ minGroup groupable events on the same lane.
+ * Spawns, completions, and messages always stay visible — they are the story;
+ * the folded noise is reachable by expanding the section. */
+export function groupFlowRows(
+  rows: FlowRow[],
+  expanded: Set<string>,
+  minGroup = 4
+): FlowDisplayRow[] {
+  const out: FlowDisplayRow[] = [];
+  let run: FlowRow[] = [];
+
+  const flush = () => {
+    if (run.length === 0) return;
+    if (run.length >= minGroup) {
+      const first = run[0].event as { timestamp?: number };
+      const key = `${run[0].lane}:${first.timestamp ?? 0}:${run.length >= 0 ? run[0].event.kind : ""}`;
+      out.push({ type: "section", key, lane: run[0].lane, rows: run });
+      if (expanded.has(key)) {
+        for (const r of run) out.push({ type: "row", row: r });
+      }
+    } else {
+      for (const r of run) out.push({ type: "row", row: r });
+    }
+    run = [];
+  };
+
+  for (const row of rows) {
+    const groupable = GROUPABLE.has(row.event.kind) && row.targetLane === undefined;
+    if (groupable && (run.length === 0 || run[0].lane === row.lane)) {
+      run.push(row);
+    } else {
+      flush();
+      if (groupable) {
+        run.push(row);
+      } else {
+        out.push({ type: "row", row });
+      }
+    }
+  }
+  flush();
+  return out;
+}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
-import { buildFlowLayout } from "../flow";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buildFlowLayout, groupFlowRows, FlowDisplayRow } from "../flow";
 import type { AgentVizEvent, AgentNode } from "../types";
 
 interface Props {
@@ -33,24 +33,16 @@ function truncate(s: string, n: number): string {
 export function FlowView({ timeline, agents, onSelectNode }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const [showLogs, setShowLogs] = useState(true);
+  const [showTools, setShowTools] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const layout = useMemo(() => {
     const visible = timeline.length > MAX_ROWS ? timeline.slice(-MAX_ROWS) : timeline;
     return buildFlowLayout(visible);
   }, [timeline]);
 
-  /* track whether the user is reading history or riding the live edge */
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  };
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-  }, [layout.rows.length]);
-
-  /* unresolved tool calls render as live (gold) marks */
+  /* unresolved tool calls render as live (gold) marks — computed pre-filter */
   const resolved = useMemo(() => {
     const ids = new Set<string>();
     for (const r of layout.rows) {
@@ -60,29 +52,58 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
     return ids;
   }, [layout.rows]);
 
+  const display: FlowDisplayRow[] = useMemo(() => {
+    const filtered = layout.rows.filter((r) => {
+      if (!showLogs && r.event.kind === "log") return false;
+      if (!showTools && (r.event.kind === "tool_call_pending" || r.event.kind === "tool_result" || r.event.kind === "tool_denied")) return false;
+      return true;
+    });
+    return groupFlowRows(filtered, expanded);
+  }, [layout.rows, showLogs, showTools, expanded]);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+  }, [display.length]);
+
+  const toggleSection = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const laneX = (i: number) => GUTTER + i * LANE_W + LANE_W / 2;
   const rowY = (i: number) => TOP_PAD + i * ROW_H + ROW_H / 2;
 
   const width = GUTTER + layout.lanes.length * LANE_W + 40;
-  const height = TOP_PAD + Math.max(layout.rows.length, 1) * ROW_H + 30;
+  const height = TOP_PAD + Math.max(display.length, 1) * ROW_H + 30;
 
-  /* lane life span: first and last row index that touches the lane */
+  /* lane life span over display rows */
   const span = useMemo(() => {
     const s = new Map<number, { from: number; to: number; ended: boolean }>();
-    layout.rows.forEach((r, i) => {
-      for (const lane of [r.lane, r.targetLane]) {
+    display.forEach((d, i) => {
+      const lanes = d.type === "section" ? [d.lane] : [d.row.lane, d.row.targetLane];
+      for (const lane of lanes) {
         if (lane === undefined) continue;
         const cur = s.get(lane);
         if (!cur) s.set(lane, { from: i, to: i, ended: false });
         else cur.to = i;
       }
-      if (r.event.kind === "agent_complete") {
-        const cur = s.get(r.lane);
+      if (d.type === "row" && d.row.event.kind === "agent_complete") {
+        const cur = s.get(d.row.lane);
         if (cur) cur.ended = true;
       }
     });
     return s;
-  }, [layout.rows]);
+  }, [display]);
 
   if (layout.lanes.length === 0) {
     return (
@@ -94,7 +115,11 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
 
   return (
     <div className="flow-view" ref={scrollRef} onScroll={onScroll}>
-      <div className="flow-headers" style={{ width, paddingLeft: GUTTER }}>
+      <div className="flow-headers" style={{ width }}>
+        <div className="flow-filters" style={{ width: GUTTER }}>
+          <button className={`flow-chip ${showTools ? "on" : ""}`} onClick={() => setShowTools((v) => !v)}>⚒</button>
+          <button className={`flow-chip ${showLogs ? "on" : ""}`} onClick={() => setShowLogs((v) => !v)}>≡</button>
+        </div>
         {layout.lanes.map((lane) => {
           const agent = agents[lane.id];
           const color = STATUS_COLOR[agent?.status ?? "paused"];
@@ -120,7 +145,6 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
           </marker>
         </defs>
 
-        {/* lane spines */}
         {layout.lanes.map((lane, i) => {
           const sp = span.get(i);
           if (!sp) return null;
@@ -137,9 +161,37 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
           );
         })}
 
-        {layout.rows.map((row, i) => {
-          const e = row.event;
+        {display.map((d, i) => {
           const y = rowY(i);
+
+          if (d.type === "section") {
+            const x = laneX(d.lane);
+            const isOpen = expanded.has(d.key);
+            const tools = d.rows.filter((r) => r.event.kind !== "log").length;
+            const logs = d.rows.length - tools;
+            const livePending = d.rows.filter(
+              (r) => r.event.kind === "tool_call_pending" && !resolved.has(r.event.call_id)
+            ).length;
+            const color = livePending > 0 ? "#ffd166" : "#5d6f8d";
+            const parts = [
+              `${d.rows.length} events`,
+              tools > 0 ? `⚒${tools}` : "",
+              logs > 0 ? `≡${logs}` : "",
+              livePending > 0 ? `⏳${livePending}` : "",
+            ].filter(Boolean).join(" · ");
+            return (
+              <g key={`s-${d.key}`} className="flow-section" onClick={() => toggleSection(d.key)}>
+                <rect x={x - 56} y={y - 9} width={112 + parts.length * 3} height={18}
+                  fill="rgba(125,170,255,0.05)" stroke="rgba(125,170,255,0.22)" strokeWidth={1} rx={2} />
+                <text x={x - 48} y={y + 3} className="flow-label" fill={color}>
+                  {isOpen ? "▾" : "▸"} {parts}
+                </text>
+              </g>
+            );
+          }
+
+          const row = d.row;
+          const e = row.event;
           const x = laneX(row.lane);
           const ts = "timestamp" in e ? (
             <text key="ts" x={8} y={y + 3} className="flow-ts">{fmtTime(e.timestamp)}</text>

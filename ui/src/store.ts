@@ -147,6 +147,17 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       );
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: updated } } };
     }
+    case "usage": {
+      const agent = state.agents[event.agent_id];
+      if (!agent) return state;
+      const prev = agent.usage ?? { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+      const usage = {
+        input_tokens: prev.input_tokens + (event.input_tokens || 0),
+        output_tokens: prev.output_tokens + (event.output_tokens || 0),
+        cost_usd: prev.cost_usd + (event.cost_usd || 0),
+      };
+      return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, usage } } };
+    }
     case "agent_message": {
       const key = `${event.from_agent_id}:${event.to_agent_id}`;
       const existing = state.messageEdges[key] ?? {

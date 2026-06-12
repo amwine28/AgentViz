@@ -603,6 +603,48 @@ textarea, input { cursor: text; }
 .stat .v.bottleneck { color: var(--c-wait); font-size: 12px; }
 .stat .v.isolates { color: var(--c-err); font-size: 11px; }
 
+.audit-title { border-top: 1px solid var(--line); }
+.audit-grade { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; }
+.audit-clean { padding: 10px 14px; font-size: 10px; color: var(--c-done); letter-spacing: 0.08em; }
+.audit-findings { max-height: 180px; overflow-y: auto; }
+.audit-finding {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(125, 170, 255, 0.07);
+}
+.audit-finding .penalty {
+  color: var(--c-err);
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.audit-finding .reason { font-size: 10px; color: var(--ink-dim); line-height: 1.45; }
+
+/* FLOW filter chips + sections */
+.flow-filters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.flow-chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 11px;
+  width: 26px;
+  height: 22px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+.flow-chip.on { color: var(--c-run); border-color: var(--line-bright); background: rgba(63, 224, 255, 0.08); }
+.flow-section { cursor: pointer; }
+.flow-section:hover rect { stroke: rgba(125, 170, 255, 0.5); }
+
 /* ---- Empty state ------------------------------------------------ */
 
 .empty-state {

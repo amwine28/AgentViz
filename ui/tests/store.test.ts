@@ -147,6 +147,14 @@ describe("store reducer", () => {
     expect(state.timeline.map((e) => e.kind)).toEqual(["agent_spawn", "agent_message"]); // acks are plumbing, not narrative
   });
 
+  test("usage events aggregate tokens and cost on the agent", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: { kind: "usage", agent_id: "a1", input_tokens: 100, output_tokens: 40, model: "m", cost_usd: 0.01, timestamp: 2 } });
+    state = reducer(state, { type: "event", event: { kind: "usage", agent_id: "a1", input_tokens: 50, output_tokens: 10, model: "m", cost_usd: 0.005, timestamp: 3 } });
+    expect(state.agents["a1"].usage).toEqual({ input_tokens: 150, output_tokens: 50, cost_usd: 0.015 });
+  });
+
   test("timeline resets on session_start", () => {
     const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
     let state = reducer(initialState, { type: "event", event: spawn });

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .events import (
     AgentSpawnEvent, AgentStatusEvent, AgentCompleteEvent,
     ToolCallPendingEvent, ToolResultEvent, ToolDeniedEvent, LogEvent,
-    AgentStatus, serialize, _id
+    UsageEvent, AgentStatus, serialize, _id
 )
 from .exceptions import AgentStopped, ToolCallDenied
 
@@ -90,6 +90,23 @@ class Agent:
         await self._relay.send(serialize(
             LogEvent(agent_id=self.agent_id, content=content, level=level)
         ))
+
+    async def report_usage(
+        self,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        model: str | None = None,
+        cost_usd: float | None = None,
+    ) -> None:
+        """Report LLM token/cost consumption for this agent. Feeds the
+        efficiency audit — call it after each model interaction."""
+        await self._relay.send(serialize(UsageEvent(
+            agent_id=self.agent_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=model,
+            cost_usd=cost_usd,
+        )))
 
     async def _emit_tool_denied(
         self, call_id: str, name: str, reason: Literal["denied", "timeout"]

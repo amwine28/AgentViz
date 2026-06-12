@@ -211,3 +211,22 @@ async def test_agent_log_emits_log_event(unused_tcp_port):
     assert len(logs) == 1
     assert logs[0]["content"] == "hello"
     assert logs[0]["level"] == "warn"
+
+
+@pytest.mark.asyncio
+async def test_report_usage_emits_usage_event(unused_tcp_port):
+    events_received = []
+    async with websockets.serve(make_capture_relay(events_received), "localhost", unused_tcp_port):
+        s = session(name="t", port=unused_tcp_port, autostart_relay=False)
+        await s.connect()
+        async with s.agent("worker") as agent:
+            await agent.report_usage(input_tokens=1200, output_tokens=300, model="claude-sonnet-4-6", cost_usd=0.012)
+        await s.close()
+
+    usage = [e for e in events_received if e["kind"] == "usage"]
+    assert len(usage) == 1
+    assert usage[0]["input_tokens"] == 1200
+    assert usage[0]["output_tokens"] == 300
+    assert usage[0]["model"] == "claude-sonnet-4-6"
+    assert usage[0]["cost_usd"] == 0.012
+    assert usage[0]["agent_id"] == agent.agent_id

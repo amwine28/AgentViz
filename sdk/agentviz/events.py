@@ -6,7 +6,7 @@ import uuid
 EventKind = Literal[
     "session_start", "agent_spawn", "agent_status", "tool_call_pending",
     "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
-    "command_ack"
+    "command_ack", "usage"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
@@ -92,6 +92,16 @@ class LogEvent:
     agent_id: str = ""
     content: str = ""
     level: Literal["info", "warn", "error"] = "info"
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class UsageEvent:
+    kind: Literal["usage"] = field(default="usage", init=False)
+    agent_id: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    model: str | None = None
+    cost_usd: float | None = None
     timestamp: float = field(default_factory=_now)
 
 @dataclass

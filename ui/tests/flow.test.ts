@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { buildFlowLayout } from "../src/flow";
+import { buildFlowLayout, groupFlowRows } from "../src/flow";
 import type { AgentVizEvent } from "../src/types";
 
 const t = (events: object[]) => events as AgentVizEvent[];
@@ -36,5 +36,44 @@ describe("buildFlowLayout", () => {
     expect(layout.rows[2].lane).toBe(0);
     expect(layout.lanes).toHaveLength(2); // ghost got a lane
     expect(layout.rows[3].lane).toBe(1);
+  });
+});
+
+describe("groupFlowRows", () => {
+  const noisy = buildFlowLayout(t([
+    { kind: "agent_spawn", agent_id: "a", parent_id: null, name: "a", timestamp: 1 },
+    { kind: "log", agent_id: "a", content: "1", level: "info", timestamp: 2 },
+    { kind: "log", agent_id: "a", content: "2", level: "info", timestamp: 3 },
+    { kind: "tool_call_pending", agent_id: "a", call_id: "c", name: "t", args: {}, timestamp: 4 },
+    { kind: "tool_result", agent_id: "a", call_id: "c", result: "ok", duration_ms: 1, timestamp: 5 },
+    { kind: "agent_message", from_agent_id: "a", to_agent_id: "a2", content: "hi", timestamp: 6 },
+    { kind: "log", agent_id: "a", content: "3", level: "info", timestamp: 7 },
+  ]));
+
+  test("long same-lane runs collapse into a section", () => {
+    const display = groupFlowRows(noisy.rows, new Set(), 4);
+    const section = display.find((d) => d.type === "section");
+    expect(section).toBeDefined();
+    if (section?.type === "section") {
+      expect(section.rows).toHaveLength(4); // logs+tool pair, spawn excluded
+    }
+    // spawn, section, message, trailing short log stay visible
+    expect(display.filter((d) => d.type === "row").map((d) => d.type === "row" && d.row.event.kind))
+      .toEqual(["agent_spawn", "agent_message", "log"]);
+  });
+
+  test("expanded sections emit their rows", () => {
+    const collapsed = groupFlowRows(noisy.rows, new Set(), 4);
+    const section = collapsed.find((d) => d.type === "section");
+    const expanded = groupFlowRows(noisy.rows, new Set([section!.type === "section" ? section!.key : ""]), 4);
+    expect(expanded.filter((d) => d.type === "row").length).toBeGreaterThan(
+      collapsed.filter((d) => d.type === "row").length
+    );
+  });
+
+  test("messages always break groups", () => {
+    const display = groupFlowRows(noisy.rows, new Set(), 2);
+    const msgIdx = display.findIndex((d) => d.type === "row" && d.row.event.kind === "agent_message");
+    expect(msgIdx).toBeGreaterThan(-1);
   });
 });

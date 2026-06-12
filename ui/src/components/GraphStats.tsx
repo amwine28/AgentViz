@@ -1,23 +1,29 @@
 import { useMemo } from "react";
 import { buildWorkflowGraph } from "../graph";
+import { auditWorkflow } from "../audit";
 import type { AppState } from "../store";
 
 interface Props {
   state: AppState;
 }
 
+const GRADE_COLOR: Record<string, string> = {
+  A: "#6ef7a0", B: "#3fe0ff", C: "#ffb454", D: "#ffb454", F: "#ff5277",
+};
+
 export function GraphStats({ state }: Props) {
   const graph = useMemo(() => buildWorkflowGraph(state), [state]);
+  const audit = useMemo(() => auditWorkflow(state), [state]);
   const m = graph.metrics;
   if (m.agent_count === 0) return null;
 
   const exportGraph = () => {
-    // strip UI-only metrics? no — keep them; NetworkX ignores unknown top-level
-    // keys except graph/nodes/links, and metrics ride along under `graph`.
+    // metrics + audit ride along under `graph`; NetworkX keeps them as
+    // graph-level attributes via node_link_graph.
     const payload = {
       directed: graph.directed,
       multigraph: graph.multigraph,
-      graph: { ...graph.graph, metrics: m },
+      graph: { ...graph.graph, metrics: m, audit },
       nodes: graph.nodes,
       links: graph.links,
     };
@@ -49,6 +55,31 @@ export function GraphStats({ state }: Props) {
           <div className="stat wide"><span className="k">isolates</span><span className="v isolates">{m.isolates.join(", ")}</span></div>
         )}
       </div>
+
+      <div className="panel-title audit-title">
+        <span>◍ Efficiency audit</span>
+        <span className="audit-grade" style={{ color: GRADE_COLOR[audit.grade] }}>
+          {audit.score} · {audit.grade}
+        </span>
+      </div>
+      {audit.tokens_total > 0 && (
+        <div className="stats-grid">
+          <div className="stat"><span className="k">tokens</span><span className="v">{audit.tokens_total.toLocaleString()}</span></div>
+          <div className="stat"><span className="k">cost</span><span className="v">${audit.cost_total.toFixed(3)}</span></div>
+        </div>
+      )}
+      {audit.findings.length === 0 ? (
+        <div className="audit-clean">no inefficiencies detected</div>
+      ) : (
+        <div className="audit-findings">
+          {audit.findings.map((f) => (
+            <div key={f.rule} className="audit-finding">
+              <span className="penalty">−{f.penalty}</span>
+              <span className="reason" title={f.agents.join(", ")}>{f.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

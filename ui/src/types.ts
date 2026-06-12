@@ -2,7 +2,7 @@ export type AgentStatus = "running" | "waiting" | "complete" | "error" | "paused
 export type EventKind =
   | "session_start" | "agent_spawn" | "agent_status" | "tool_call_pending"
   | "tool_result" | "tool_denied" | "agent_message" | "log" | "agent_complete"
-  | "command_ack";
+  | "command_ack" | "usage";
 export type CommandKind =
   | "tool_approve" | "tool_deny" | "agent_pause" | "agent_resume"
   | "agent_stop" | "inject_message" | "spawn_agent";
@@ -70,6 +70,15 @@ export interface LogEvent {
   level: "info" | "warn" | "error";
   timestamp: number;
 }
+export interface UsageEvent {
+  kind: "usage";
+  agent_id: string;
+  input_tokens: number;
+  output_tokens: number;
+  model: string | null;
+  cost_usd: number | null;
+  timestamp: number;
+}
 export interface AgentCompleteEvent {
   kind: "agent_complete";
   agent_id: string;
@@ -81,7 +90,7 @@ export interface AgentCompleteEvent {
 export type AgentVizEvent = (
   | SessionStartEvent | AgentSpawnEvent | AgentStatusEvent | ToolCallPendingEvent
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
-  | CommandAckEvent
+  | CommandAckEvent | UsageEvent
 ) & { seq?: number };
 
 // UI state shapes
@@ -92,6 +101,7 @@ export interface AgentNode {
   status: AgentStatus;
   tool_calls: Array<{ call_id: string; name: string; args: Record<string, unknown>; result?: unknown; duration_ms?: number; pending: boolean; denied?: "denied" | "timeout"; requested_at?: number; timeout_s?: number }>;
   logs: Array<{ content: string; level: "info" | "warn" | "error"; timestamp: number }>;
+  usage?: { input_tokens: number; output_tokens: number; cost_usd: number };
 }
 
 export interface MessageEdge {

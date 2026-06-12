@@ -56,6 +56,12 @@ async def worker_life(s, squad_lead, name: str, lead_name: str):
             except ToolCallDenied:
                 await w.log(f"{tool} denied — rerouting", level="warn")
             await w.set_status("running")
+            await w.report_usage(
+                input_tokens=random.randint(800, 3000),
+                output_tokens=random.randint(100, 600),
+                model="claude-sonnet-4-6",
+                cost_usd=round(random.uniform(0.004, 0.02), 4),
+            )
             await s.send_message(name, lead_name, random.choice(CHATTER))
             await asyncio.sleep(random.uniform(0.8, 2.2))
 
@@ -83,6 +89,9 @@ async def saboteur(s, orch):
     try:
         async with s.agent("rogue-probe", parent_id=orch.agent_id) as r:
             await r.log("entering uncharted sector", level="warn")
+            # burns a huge budget while producing nothing — the audit catches it
+            await r.report_usage(input_tokens=85_000, output_tokens=9_000,
+                                 model="claude-opus-4-8", cost_usd=1.84)
             await asyncio.sleep(4)
             await r.log("containment breach!", level="error")
             raise RuntimeError("signal lost in sector 13")
