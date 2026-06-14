@@ -7,5 +7,7 @@
     "strict": true,
     "esModuleInterop": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "comment": "replay-claude-code.ts imports the shared ui/ translator across packages and is run via ts-node --transpile-only, never built into dist; exclude it so tsc's rootDir check passes.",
+  "exclude": ["src/replay-claude-code.ts"]
 }

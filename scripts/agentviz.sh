@@ -1,6 +1,7 @@
 #!/bin/bash
-# AgentViz launcher — relay up, browser open, optional demo swarm.
+# AgentViz launcher — relay up, browser open, optional demo swarm or session replay.
 # Usage: agentviz.sh [--demo] [--rebuild] [--no-browser]
+#                    [--replay <path-to-claude-code-session.jsonl> [--outcome=1]]
 set -e
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,13 +9,18 @@ PORT_FILE="$HOME/.agentviz/relay.json"
 DEMO=0
 REBUILD=0
 NO_BROWSER=0
+REPLAY=""
+OUTCOME=""
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --demo) DEMO=1 ;;
     --rebuild) REBUILD=1 ;;
     --no-browser) NO_BROWSER=1 ;;
+    --replay) shift; REPLAY="$1" ;;
+    --outcome=*) OUTCOME="$1" ;;
   esac
+  shift
 done
 
 # --- build if needed -------------------------------------------------
@@ -60,6 +66,12 @@ echo "[agentviz] live 3D world: $URL"
 # --- browser ---------------------------------------------------------
 if [ "$NO_BROWSER" != 1 ] && [ -z "$AGENTVIZ_NO_BROWSER" ]; then
   open "$URL" 2>/dev/null || true
+fi
+
+# --- replay a real Claude Code session -------------------------------
+if [ -n "$REPLAY" ]; then
+  echo "[agentviz] replaying Claude Code session: $REPLAY"
+  exec bash -c "cd '$REPO/relay' && npm run --silent replay -- '$REPLAY' ${OUTCOME}"
 fi
 
 # --- demo swarm ------------------------------------------------------

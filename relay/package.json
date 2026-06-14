@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
+    "replay": "ts-node --transpile-only src/replay-claude-code.ts",
     "test": "jest"
   },
   "dependencies": {

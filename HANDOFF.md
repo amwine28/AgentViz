@@ -103,12 +103,17 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
         usage dedupe by message.id, tool_use dedupe by block id, upward handoff + completion,
         per-key seq stamping. VERIFIED on a REAL 10-subagent session (307 events, 11 agents,
         credit runs → 1 feedback loop = honest converging topology). 65 ui tests green.
+        (1) Runnable replay-to-relay wiring — DONE. relay/src/replay-claude-code.ts
+            (ts-node --transpile-only; `cd relay && npm run replay -- <session.jsonl>
+            [--speed=N] [--outcome=1]`), reuses the shared ui/ translator (relay tsconfig
+            EXCLUDES the file so cross-package import doesn't break tsc build). Launcher flag
+            `agentviz.sh --replay <jsonl> [--outcome=1]`. VERIFIED end-to-end: replayed the
+            real professor-outreach session (308 events) → browser CREDIT lens rendered all
+            11 real subagents, honestly flagged the converging feedback loop + assumed root
+            sink + "run Rung 2" warning. README "Replay a real Claude Code session" section added.
         REMAINING Phase D:
-          (1) Runnable replay-to-relay wiring (Node WS sender that reads a real session dir
-              → claudeCodeToEvents → sends to relay). FS loader must be Node-only (NOT ui/src
-              — vite would bundle fs). Put under a node-runnable path (relay/ or a small CLI).
           (2) OTel/OpenInference adapter (ui/src/ingest/otel.ts) + relay POST /v1/traces OTLP/JSON
-              receiver + golden fixtures (spec §5.2). Deferred to next session.
+              receiver + golden fixtures (spec §5.2). <-- NEXT
         Real CC transcripts: ~/.claude/projects/-Users-aaronwinegrad/*.jsonl (+ <sid>/subagents/
         agent-*.jsonl + .meta.json). Confirmed schema: assistant msg.content[] tool_use{id,name,
         input}, msg.usage{input_tokens,output_tokens}, msg.id, msg.model; user tool_result

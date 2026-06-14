@@ -87,6 +87,25 @@ G = nx.node_link_graph(json.load(open("my-run.graph.json")))
 # every agent run is now a graph dataset: feed it to NetworkX, PyTorch Geometric, anything.
 ```
 
+## Replay a real Claude Code session
+
+Already ran a multi-agent Claude Code session? Watch it play back — in 3D, FLOW, and
+with a credit map — straight from its transcript, no instrumentation:
+
+```bash
+bash scripts/agentviz.sh --replay ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl --outcome=1
+```
+
+This reads the session's top-level JSONL plus its sub-agent sidechain transcripts,
+reconstructs the spawn hierarchy and handoffs, and streams them into the live world.
+`--outcome=1` attaches the terminal reward (you ran it, you know it passed) so the CREDIT
+lens populates. Outcomes are always external — never guessed from the transcript.
+
+On a real converging session (sub-agents reporting back to one orchestrator), the CREDIT
+lens will honestly say *"results converge at the orchestrator — reachability is near-useless
+here, run counterfactual replay for causal credit"* rather than fabricate per-agent numbers.
+That honesty is the point.
+
 ## SDK
 
 Wrap any async Python agents. Emission is **fail-open** — a down or slow relay never
