@@ -97,9 +97,22 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
         branch). Verified in browser (agentviz-credit2.png). 57 ui green.
         NOTE: demo_swarm.py now emits per-agent 'quality' + run-level 'mission' terminal
         outcome; its converging topology makes Credit honestly show the feedback-loop case.
-  - [ ] Phase D [SHIP] — ingestion: ui/src/ingest/claudeCode.ts + ingest/otel.ts + relay OTLP
-        receiver; golden fixtures in examples/fixtures/. Lights up real data. <-- NEXT
-        (spec §5; 502 real transcripts at ~/.claude/projects/-Users-aaronwinegrad/*.jsonl).
+  - [~] Phase D [SHIP] — ingestion. DONE: ui/src/ingest/claudeCode.ts (pure translator) +
+        examples/fixtures/claude_code_session.json + ui/tests/ingest_claudecode.test.ts (8).
+        Maps spawn hierarchy via meta.toolUseId, tool calls/results, denial-from-interrupt,
+        usage dedupe by message.id, tool_use dedupe by block id, upward handoff + completion,
+        per-key seq stamping. VERIFIED on a REAL 10-subagent session (307 events, 11 agents,
+        credit runs → 1 feedback loop = honest converging topology). 65 ui tests green.
+        REMAINING Phase D:
+          (1) Runnable replay-to-relay wiring (Node WS sender that reads a real session dir
+              → claudeCodeToEvents → sends to relay). FS loader must be Node-only (NOT ui/src
+              — vite would bundle fs). Put under a node-runnable path (relay/ or a small CLI).
+          (2) OTel/OpenInference adapter (ui/src/ingest/otel.ts) + relay POST /v1/traces OTLP/JSON
+              receiver + golden fixtures (spec §5.2). Deferred to next session.
+        Real CC transcripts: ~/.claude/projects/-Users-aaronwinegrad/*.jsonl (+ <sid>/subagents/
+        agent-*.jsonl + .meta.json). Confirmed schema: assistant msg.content[] tool_use{id,name,
+        input}, msg.usage{input_tokens,output_tokens}, msg.id, msg.model; user tool_result
+        {tool_use_id,is_error,content}; meta.json {agentType,description,toolUseId}.
   - [ ] Phase E — observer→orchestrator infra (run_id, append-only log, re-run engine,
         dry-run/mock-side-effects). Gates Rungs 2-3.
   - [ ] Phase F [Rung 2] counterfactual leave-one-out (paired CRN, BCa CI, neutralization modes).

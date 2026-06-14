@@ -1,0 +1,46 @@
+{
+  "sessionId": "sess-root",
+  "title": "build the thing",
+  "lines": [
+    { "type": "ai-title", "aiTitle": "build the thing", "sessionId": "sess-root" },
+    { "type": "assistant", "uuid": "a1", "timestamp": "2026-06-14T10:00:00.000Z",
+      "message": { "id": "m1", "model": "claude-sonnet-4-6", "role": "assistant",
+        "content": [{ "type": "tool_use", "id": "tu-read", "name": "Read", "input": { "file": "x.py" } }],
+        "usage": { "input_tokens": 1000, "output_tokens": 200 } } },
+    { "type": "assistant", "uuid": "a1b", "timestamp": "2026-06-14T10:00:00.500Z",
+      "message": { "id": "m1", "model": "claude-sonnet-4-6", "role": "assistant",
+        "content": [{ "type": "tool_use", "id": "tu-read", "name": "Read", "input": { "file": "x.py" } }],
+        "usage": { "input_tokens": 1000, "output_tokens": 200 } } },
+    { "type": "user", "uuid": "u1", "timestamp": "2026-06-14T10:00:01.000Z",
+      "message": { "role": "user",
+        "content": [{ "type": "tool_result", "tool_use_id": "tu-read", "is_error": false, "content": "file contents" }] } },
+    { "type": "assistant", "uuid": "a2", "timestamp": "2026-06-14T10:00:02.000Z",
+      "message": { "id": "m2", "model": "claude-sonnet-4-6", "role": "assistant",
+        "content": [{ "type": "tool_use", "id": "tu-agent", "name": "Agent",
+          "input": { "description": "do research", "model": "claude-sonnet-4-6" } }],
+        "usage": { "input_tokens": 1500, "output_tokens": 300 } } },
+    { "type": "user", "uuid": "u2", "timestamp": "2026-06-14T10:00:30.000Z",
+      "message": { "role": "user",
+        "content": [{ "type": "tool_result", "tool_use_id": "tu-agent", "is_error": false, "content": "research complete" }] } },
+    { "type": "assistant", "uuid": "a3", "timestamp": "2026-06-14T10:00:31.000Z",
+      "message": { "id": "m3", "model": "claude-sonnet-4-6", "role": "assistant",
+        "content": [{ "type": "text", "text": "all done" }],
+        "usage": { "input_tokens": 800, "output_tokens": 100 }, "stop_reason": "end_turn" } }
+  ],
+  "subagents": [
+    {
+      "agentId": "agent-research",
+      "meta": { "toolUseId": "tu-agent", "description": "do research", "agentType": "general-purpose" },
+      "lines": [
+        { "type": "assistant", "uuid": "s1", "timestamp": "2026-06-14T10:00:05.000Z",
+          "message": { "id": "sm1", "model": "claude-sonnet-4-6", "role": "assistant",
+            "content": [{ "type": "tool_use", "id": "tu-web", "name": "WebSearch", "input": { "q": "foo" } }],
+            "usage": { "input_tokens": 2000, "output_tokens": 400 } } },
+        { "type": "user", "uuid": "s2", "timestamp": "2026-06-14T10:00:10.000Z",
+          "message": { "role": "user",
+            "content": [{ "type": "tool_result", "tool_use_id": "tu-web", "is_error": true,
+              "content": "[Request interrupted by user] denied" }] } }
+      ]
+    }
+  ]
+}
