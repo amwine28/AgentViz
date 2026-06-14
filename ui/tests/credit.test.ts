@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { assignCredit } from "../src/credit";
+import { assignCredit, buildCreditExport, RUNG1_DISCLAIMER } from "../src/credit";
 import { play } from "./helpers";
 
 // terse event builders
@@ -133,5 +133,31 @@ describe("assignCredit — Rung 1 (provenance / reachability + dominators)", () 
     const rep = credit(play([spawn("A", null), spawn("B", "A"), msg("A", "B")]));
     expect(rep.outcome).toBeNull();
     expect(rep.contributors).toHaveLength(0);
+  });
+});
+
+describe("buildCreditExport (NetworkX node-link with credit facts)", () => {
+  test("merges per-node credit facts and attaches the full report under graph.graph.credit", () => {
+    const exp = buildCreditExport(play([
+      spawn("A", null), spawn("B", "A"), spawn("R", "A"), msg("B", "R"), sinkAt("R"),
+    ]));
+    expect(exp.directed).toBe(true);
+    expect(exp.multigraph).toBe(false);
+    const b = exp.nodes.find((n) => n.name === "B")!;
+    expect(b.on_critical_path).toBe(true);
+    expect("is_bottleneck" in b).toBe(true);
+    expect("in_feedback_loop" in b).toBe(true);
+    expect(exp.graph.credit.method).toBe("structural");
+    // node-link integrity: every link endpoint resolves to a node id
+    const idset = new Set(exp.nodes.map((n) => n.id));
+    for (const l of exp.links) {
+      expect(idset.has(l.source as string)).toBe(true);
+      expect(idset.has(l.target as string)).toBe(true);
+    }
+  });
+
+  test("Rung-1 disclaimer states the necessary-condition (not causal) framing", () => {
+    expect(RUNG1_DISCLAIMER.toLowerCase()).toContain("necessary");
+    expect(RUNG1_DISCLAIMER.toLowerCase()).toContain("counterfactual");
   });
 });

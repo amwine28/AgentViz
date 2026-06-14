@@ -1,3 +1,5 @@
+import type { ViewMode } from "../types";
+
 interface Props {
   connected: boolean;
   sessionName: string;
@@ -5,8 +7,8 @@ interface Props {
   agentCount: number;
   eventCount: number;
   droppedCount: number;
-  view: "3d" | "2d" | "flow";
-  onSetView: (v: "3d" | "2d" | "flow") => void;
+  view: ViewMode;
+  onSetView: (v: ViewMode) => void;
   onPauseAll: () => void;
   onStopAll: () => void;
 }
@@ -44,6 +46,8 @@ export function TopBar({
         <button className={view === "2d" ? "active" : ""} onClick={() => onSetView("2d")}>2D</button>
         <div className="divider" />
         <button className={view === "flow" ? "active" : ""} onClick={() => onSetView("flow")}>FLOW</button>
+        <div className="divider" />
+        <button className={view === "credit" ? "active" : ""} onClick={() => onSetView("credit")}>CREDIT</button>
       </div>
       <span className="hotkey-hint">[V]</span>
     </div>

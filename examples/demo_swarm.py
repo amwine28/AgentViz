@@ -62,6 +62,11 @@ async def worker_life(s, squad_lead, name: str, lead_name: str):
                 model="claude-sonnet-4-6",
                 cost_usd=round(random.uniform(0.004, 0.02), 4),
             )
+            # grounded per-agent quality signal (intermediate) -> credit perAgent + FLOW lane
+            await w.report_outcome(
+                round(random.uniform(0.6, 1.0), 2), channel="quality",
+                scale="unit", source="metric",
+            )
             await s.send_message(name, lead_name, random.choice(CHATTER))
             await asyncio.sleep(random.uniform(0.8, 2.2))
 
@@ -136,6 +141,10 @@ async def mission(s):
         await asyncio.gather(*squad_tasks)
         await asyncio.gather(*side_tasks)
         await orch.log("all squads accounted for — mission complete")
+        # run-level TERMINAL outcome (the sparse end-of-run reward) — feeds credit
+        # assignment. No result_agent_ids hint, so the sink resolves to the root
+        # coordinator and the Credit lens honestly flags the converging topology.
+        await s.report_outcome(1.0, channel="mission", source="eval_harness")
 
 
 async def main():

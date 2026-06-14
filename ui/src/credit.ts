@@ -1,4 +1,11 @@
 import type { AppState } from "./store";
+import { buildWorkflowGraph } from "./graph";
+
+/** Mandatory honesty disclaimer for Rung 1 (necessary-condition, not causal). */
+export const RUNG1_DISCLAIMER =
+  "Necessary-condition attribution: shows whose output could have reached the result " +
+  "and which agents are structural bottlenecks — not who caused the outcome. " +
+  "Run counterfactual replay (Rung 2) for causal credit.";
 
 /** Rung 1 credit assignment — provenance / reachability + dominators.
  *
@@ -216,5 +223,32 @@ export function assignCredit(state: AppState, channel?: string): CreditReport {
     outcome: outcomeReport, method: "structural",
     sink: { ids: sinkIds, basis, resolved: true, converging },
     contributors, dead_branches, feedback_loops,
+  };
+}
+
+/** Credit-aware NetworkX node-link export. Reuses graph.ts's tested builder and
+ * merges per-node credit facts; the full CreditReport rides under graph.graph.credit.
+ * Owned by the credit lens — graph.ts and its export stay untouched (§4.4). */
+export function buildCreditExport(state: AppState, channel?: string) {
+  const g = buildWorkflowGraph(state);
+  const report = assignCredit(state, channel);
+  const byId = new Map(report.contributors.map((c) => [c.agent_id, c]));
+  const nodes = g.nodes.map((n) => {
+    const c = byId.get(n.id);
+    return {
+      ...n,
+      on_critical_path: c?.on_critical_path ?? false,
+      is_bottleneck: c?.is_bottleneck ?? false,
+      in_feedback_loop: c?.in_feedback_loop ?? false,
+      credit: c?.credit ?? null,
+      ci: c?.ci ?? null,
+    };
+  });
+  return {
+    directed: true as const,
+    multigraph: false as const,
+    graph: { ...g.graph, credit: report },
+    nodes,
+    links: g.links,
   };
 }

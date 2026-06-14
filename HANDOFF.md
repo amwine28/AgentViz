@@ -81,17 +81,25 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
       ingested events bypass seq-stamper). Read §0 changelog + §2/§3 before coding.
 
   Build plan (8 phases; TDD; A→B→C→D is the Rung-1 shippable slice):
-  - [ ] Phase A — outcome primitive + completion-order fix (events.py OutcomeEvent+EventKind,
-        agent.py/session.py report_outcome, types.ts, store.ts outcome reducer + completed_at/
-        exit_status on AgentNode, FLOW real work in flow.ts+FlowView.tsx). Tests: test_outcome.py.
-  - [ ] Phase B [SHIP] — Rung 1 assignCredit(state) in ui/src/credit.ts (pure peer of
-        audit.ts/graph.ts): ghost-edge filter, Tarjan SCC, sink resolution, reverse-reachability
-        on_critical_path, dominator is_bottleneck, dead_branches, feedback_loops; credit=null/
-        ci=null (structural = necessary-condition claim, NOT causal). Tests: credit.test.ts.
-  - [ ] Phase C [SHIP] — Credit lens (4th view): App.tsx ViewMode + V-cycle, TopBar 4th toggle,
-        CreditView.tsx (facts table, provenance subgraph, honesty header + Rung-1 disclaimer).
+  - [x] Phase A DONE — outcome primitive end-to-end (events.py OutcomeEvent, agent/session
+        report_outcome, types.ts, store outcomes aggregation + completed_at/exit_status,
+        FLOW outcome case). 22 sdk / store+flow tests green. Committed.
+  - [x] Phase B DONE [SHIP] — Rung 1 ui/src/credit.ts assignCredit(state): ghost-edge filter,
+        Tarjan SCC, sink resolution (agent-scoped/result_agent_ids/root-converging), reverse-
+        reachability on_critical_path, removal-based dominator is_bottleneck, dead_branches,
+        feedback_loops; credit=null/ci=null; buildCreditExport + RUNG1_DISCLAIMER. ui/tests/
+        helpers.ts (shared play), credit.test.ts (13). Committed.
+  - [x] Phase C DONE [SHIP] — Credit lens (4th view). ViewMode in types.ts; App.tsx 4-way
+        V-cycle + render; TopBar CREDIT toggle (nth-child(7)); CreditView.tsx (honesty header,
+        outcome chip w/ grounded flag, Rung-1 disclaimer, converging warning, contributors
+        facts table w/ badges + NO causal number, dead-branch + feedback-loop groups, credit-
+        owned export). examples/credit_demo.py (clean DAG: bottleneck chain + slacker dead
+        branch). Verified in browser (agentviz-credit2.png). 57 ui green.
+        NOTE: demo_swarm.py now emits per-agent 'quality' + run-level 'mission' terminal
+        outcome; its converging topology makes Credit honestly show the feedback-loop case.
   - [ ] Phase D [SHIP] — ingestion: ui/src/ingest/claudeCode.ts + ingest/otel.ts + relay OTLP
-        receiver; golden fixtures in examples/fixtures/. Lights up real data.
+        receiver; golden fixtures in examples/fixtures/. Lights up real data. <-- NEXT
+        (spec §5; 502 real transcripts at ~/.claude/projects/-Users-aaronwinegrad/*.jsonl).
   - [ ] Phase E — observer→orchestrator infra (run_id, append-only log, re-run engine,
         dry-run/mock-side-effects). Gates Rungs 2-3.
   - [ ] Phase F [Rung 2] counterfactual leave-one-out (paired CRN, BCa CI, neutralization modes).

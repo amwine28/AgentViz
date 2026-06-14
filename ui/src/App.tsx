@@ -10,6 +10,8 @@ import { TopBar } from "./components/TopBar";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { GraphStats } from "./components/GraphStats";
+import { CreditView } from "./components/CreditView";
+import type { ViewMode } from "./types";
 
 // Served by the relay itself in production, so the ws port is our own port.
 // Vite dev server is the only case where we fall back to the default.
@@ -25,7 +27,7 @@ const LEGEND = [
 
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [view, setView] = useState<"3d" | "2d" | "flow">("3d");
+  const [view, setView] = useState<ViewMode>("3d");
   const sendRef = useRef<((cmd: object) => string) | null>(null);
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "v" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLInputElement)) {
-        setView((v) => (v === "3d" ? "2d" : v === "2d" ? "flow" : "3d"));
+        setView((v) => (v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "credit" : "3d"));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -85,6 +87,8 @@ export function App() {
             agents={state.agents}
             onSelectNode={selectNode}
           />
+        ) : view === "credit" ? (
+          <CreditView state={state} onSelectNode={selectNode} />
         ) : (
           <div className="stage-2d">
             <Graph
