@@ -192,12 +192,41 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
 
           const row = d.row;
           const e = row.event;
+
+          // run-level terminal outcome: full-width band spanning every lane (the story beat)
+          if (e.kind === "outcome" && row.fullWidth) {
+            const grounded = e.source !== "llm_judge";
+            const col = e.value > 0 ? "#6ef7a0" : "#ff5277";
+            return (
+              <g key={i}>
+                <rect x={GUTTER} y={y - 9} width={Math.max(0, width - GUTTER - 8)} height={18}
+                  fill="rgba(110,247,160,0.05)" stroke={col} strokeOpacity={0.4} strokeWidth={1} rx={2} />
+                <text x={GUTTER + 10} y={y + 3} className="flow-label" fill={col}>
+                  ◆ outcome [{e.channel}] = {e.value} · {e.source}
+                  {grounded ? "" : "  ⚠ non-grounded"}{e.measured ? "" : "  (assumed)"}
+                </text>
+              </g>
+            );
+          }
+
           const x = laneX(row.lane);
           const ts = "timestamp" in e ? (
             <text key="ts" x={8} y={y + 3} className="flow-ts">{fmtTime(e.timestamp)}</text>
           ) : null;
 
           switch (e.kind) {
+            case "outcome": {
+              // agent-scoped intermediate reward signal on its own lane
+              const col = "#a0f0c0";
+              return (
+                <g key={i}>{ts}
+                  <circle cx={x} cy={y} r={3} fill="none" stroke={col} strokeWidth={1.4} />
+                  <text x={x + 10} y={y + 3} className="flow-label" fill={col}>
+                    ◆ {e.channel}={e.value}{e.measured ? "" : " (assumed)"}
+                  </text>
+                </g>
+              );
+            }
             case "agent_spawn": {
               const parentLane = layout.lanes[row.lane].parentLane;
               return (

@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from .relay_client import RelayClient
 from .agent import Agent
-from .events import AgentMessageEvent, SessionStartEvent, serialize
+from .events import AgentMessageEvent, SessionStartEvent, OutcomeEvent, serialize
+from typing import Literal
 
 PORT_FILE = Path.home() / ".agentviz" / "relay.json"
 DEFAULT_PORT = 3333
@@ -98,6 +99,27 @@ class Session:
         await self.client.send(serialize(
             AgentMessageEvent(from_agent_id=from_id, to_agent_id=to_id, content=content)
         ))
+
+    async def report_outcome(
+        self,
+        value: float,
+        channel: str = "reward",
+        *,
+        scale: Literal["binary", "unit", "score", "delta"] = "binary",
+        source: str = "eval_harness",
+        measured: bool = True,
+        value_min: float | None = None,
+        value_max: float | None = None,
+        detail: dict | None = None,
+    ) -> None:
+        """Report the run-level TERMINAL outcome (the sparse end-of-run reward).
+        agent_id=None routes it to the _session seq stream. detail may carry
+        result_agent_ids to declare the sink set explicitly for credit assignment."""
+        await self.client.send(serialize(OutcomeEvent(
+            agent_id=None, value=value, channel=channel, scale=scale,
+            stage="terminal", source=source, measured=measured,
+            value_min=value_min, value_max=value_max, detail=detail or {},
+        )))
 
     def _name_to_id(self, name_or_id: str) -> str | None:
         for a in self._agents.values():

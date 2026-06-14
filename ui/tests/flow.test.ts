@@ -39,6 +39,28 @@ describe("buildFlowLayout", () => {
   });
 });
 
+describe("buildFlowLayout outcomes", () => {
+  test("agent-scoped outcome sits on its agent's lane", () => {
+    const layout = buildFlowLayout(t([
+      { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 },
+      { kind: "outcome", agent_id: "a1", channel: "rubric", value: 1, scale: "unit", stage: "intermediate", source: "eval", measured: true, detail: {}, value_min: null, value_max: null, run_id: null, ablated_agent_id: null, baseline_run_id: null, baseline_value: null, timestamp: 2 },
+    ]));
+    const row = layout.rows.find((r) => r.event.kind === "outcome")!;
+    expect(row.lane).toBe(0);
+    expect(row.fullWidth).toBeFalsy();
+  });
+
+  test("run-level terminal outcome is a full-width band (lane -1)", () => {
+    const layout = buildFlowLayout(t([
+      { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 },
+      { kind: "outcome", agent_id: null, channel: "tests", value: 1, scale: "binary", stage: "terminal", source: "ci", measured: true, detail: {}, value_min: null, value_max: null, run_id: null, ablated_agent_id: null, baseline_run_id: null, baseline_value: null, timestamp: 2 },
+    ]));
+    const row = layout.rows.find((r) => r.event.kind === "outcome")!;
+    expect(row.fullWidth).toBe(true);
+    expect(row.lane).toBe(-1);
+  });
+});
+
 describe("groupFlowRows", () => {
   const noisy = buildFlowLayout(t([
     { kind: "agent_spawn", agent_id: "a", parent_id: null, name: "a", timestamp: 1 },

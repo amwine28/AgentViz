@@ -11,8 +11,9 @@ export interface FlowLane {
 
 export interface FlowRow {
   event: AgentVizEvent;
-  lane: number;
-  targetLane?: number; // messages only
+  lane: number;          // -1 for a full-width run-level band (terminal outcome)
+  targetLane?: number;   // messages only
+  fullWidth?: boolean;   // run-level terminal outcome: spans all lanes
 }
 
 export interface FlowLayout {
@@ -53,6 +54,15 @@ export function buildFlowLayout(timeline: AgentVizEvent[]): FlowLayout {
       case "agent_complete":
         rows.push({ event, lane: laneFor(event.agent_id) });
         break;
+      case "outcome":
+        if (event.agent_id == null) {
+          // run-level terminal reward → full-width band spanning every lane
+          rows.push({ event, lane: -1, fullWidth: true });
+        } else {
+          // agent-scoped intermediate signal → that agent's lane
+          rows.push({ event, lane: laneFor(event.agent_id) });
+        }
+        break;
       default:
         break; // non-narrative kinds never reach the timeline
     }
@@ -63,6 +73,7 @@ export function buildFlowLayout(timeline: AgentVizEvent[]): FlowLayout {
 
 /* ---- collapsible sections: long same-lane runs fold into one row ---- */
 
+// "outcome" is deliberately NOT groupable — it is the story, like spawns/completions.
 const GROUPABLE = new Set(["log", "tool_call_pending", "tool_result", "tool_denied"]);
 
 export type FlowDisplayRow =

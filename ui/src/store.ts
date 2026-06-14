@@ -1,6 +1,20 @@
 import type {
-  AgentVizEvent, AgentNode, MessageEdge, AgentStatus,
+  AgentVizEvent, AgentNode, MessageEdge, AgentStatus, OutcomeEvent,
 } from "./types";
+
+// One per reward channel; aggregated by the `outcome` reducer case. Consumed by
+// credit.ts (the credit ladder) — the terminal reward to reverse-reach from.
+export interface OutcomeChannel {
+  channel: string;
+  scale: OutcomeEvent["scale"];
+  value_min: number | null;
+  value_max: number | null;
+  terminal: {
+    value: number; measured: boolean; source: string; timestamp: number;
+    result_agent_ids: string[] | null;
+  } | null;
+  perAgent: Record<string, { value: number; count: number; measured: boolean }>;
+}
 
 export interface AppState {
   agents: Record<string, AgentNode>;
@@ -14,6 +28,7 @@ export interface AppState {
   lastSeq: Record<string, number>; // per-agent sequence tracking for gap detection
   acks: Record<string, "applied" | "failed">;
   timeline: AgentVizEvent[]; // narrative events in arrival order, for the FLOW view
+  outcomes: Record<string, OutcomeChannel>; // key = channel; for credit assignment
 }
 
 export const initialState: AppState = {
@@ -28,12 +43,13 @@ export const initialState: AppState = {
   lastSeq: {},
   acks: {},
   timeline: [],
+  outcomes: {},
 };
 
 const TIMELINE_CAP = 5000;
 const NARRATIVE_KINDS = new Set<string>([
   "agent_spawn", "agent_message", "tool_call_pending", "tool_result",
-  "tool_denied", "log", "agent_complete",
+  "tool_denied", "log", "agent_complete", "outcome",
 ]);
 
 type Action =
@@ -102,6 +118,8 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
         name: event.name,
         parent_id: event.parent_id,
         status: "running",
+        completed_at: null,
+        exit_status: null,
         tool_calls: [],
         logs: [],
       };
@@ -179,7 +197,42 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       const agent = state.agents[event.agent_id];
       if (!agent) return state;
       const status: AgentStatus = event.exit_status === "ok" ? "complete" : event.exit_status === "stopped" ? "paused" : "error";
-      return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, status } } };
+      // persist completion data for Rung 1 sink inference (last-completing-leaf fallback)
+      return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, status, completed_at: event.timestamp, exit_status: event.exit_status } } };
+    }
+    case "outcome": {
+      // NOTE: touches only state.outcomes (never state.agents) — so it must NOT
+      // copy the `if (!agent) return state` guard. An outcome may legitimately
+      // arrive after agent_complete, or (ingested) for an agent whose spawn was lost.
+      const ch: OutcomeChannel = state.outcomes[event.channel] ?? {
+        channel: event.channel, scale: event.scale,
+        value_min: event.value_min, value_max: event.value_max,
+        terminal: null, perAgent: {},
+      };
+      if (event.agent_id == null) {
+        // run-level terminal reward: keep the LATEST-timestamp value so that
+        // buffer-replay order and live order converge (deterministic last-write-wins).
+        const incoming = {
+          value: event.value, measured: event.measured, source: event.source,
+          timestamp: event.timestamp,
+          result_agent_ids: Array.isArray((event.detail as { result_agent_ids?: unknown }).result_agent_ids)
+            ? ((event.detail as { result_agent_ids: string[] }).result_agent_ids)
+            : null,
+        };
+        const keep = ch.terminal && ch.terminal.timestamp > incoming.timestamp ? ch.terminal : incoming;
+        return { ...state, outcomes: { ...state.outcomes, [event.channel]: {
+          ...ch, scale: event.scale, value_min: event.value_min, value_max: event.value_max, terminal: keep,
+        } } };
+      }
+      // agent-scoped (intermediate): accumulate per agent, like usage
+      const prev = ch.perAgent[event.agent_id] ?? { value: 0, count: 0, measured: true };
+      return { ...state, outcomes: { ...state.outcomes, [event.channel]: {
+        ...ch, scale: event.scale,
+        perAgent: { ...ch.perAgent, [event.agent_id]: {
+          value: prev.value + event.value, count: prev.count + 1,
+          measured: prev.measured && event.measured,
+        } },
+      } } };
     }
     default:
       return state;

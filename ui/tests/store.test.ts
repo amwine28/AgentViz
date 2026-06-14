@@ -1,6 +1,13 @@
 import { describe, test, expect } from "vitest";
 import { reducer, initialState } from "../src/store";
-import type { AgentSpawnEvent, AgentStatusEvent, ToolCallPendingEvent, AgentMessageEvent, ToolResultEvent, ToolDeniedEvent, AgentCompleteEvent } from "../src/types";
+import type { AgentSpawnEvent, AgentStatusEvent, ToolCallPendingEvent, AgentMessageEvent, ToolResultEvent, ToolDeniedEvent, AgentCompleteEvent, OutcomeEvent } from "../src/types";
+
+const outcome = (o: Partial<OutcomeEvent>): OutcomeEvent => ({
+  kind: "outcome", agent_id: null, channel: "reward", value: 0, scale: "binary",
+  value_min: null, value_max: null, stage: "terminal", source: "manual",
+  measured: true, detail: {}, run_id: null, ablated_agent_id: null,
+  baseline_run_id: null, baseline_value: null, timestamp: 1, ...o,
+});
 
 describe("store reducer", () => {
   test("agent_spawn adds node", () => {
@@ -153,6 +160,53 @@ describe("store reducer", () => {
     state = reducer(state, { type: "event", event: { kind: "usage", agent_id: "a1", input_tokens: 100, output_tokens: 40, model: "m", cost_usd: 0.01, timestamp: 2 } });
     state = reducer(state, { type: "event", event: { kind: "usage", agent_id: "a1", input_tokens: 50, output_tokens: 10, model: "m", cost_usd: 0.005, timestamp: 3 } });
     expect(state.agents["a1"].usage).toEqual({ input_tokens: 150, output_tokens: 50, cost_usd: 0.015 });
+  });
+
+  test("run-level outcome keeps the latest-timestamp value (last-write-wins)", () => {
+    let state = reducer(initialState, { type: "event", event: outcome({ channel: "tests", value: 0, timestamp: 5 }) });
+    // earlier-timestamp re-grade must NOT overwrite
+    state = reducer(state, { type: "event", event: outcome({ channel: "tests", value: 1, timestamp: 2 }) });
+    expect(state.outcomes["tests"].terminal!.value).toBe(0);
+    // later-timestamp re-grade wins
+    state = reducer(state, { type: "event", event: outcome({ channel: "tests", value: 1, timestamp: 9 }) });
+    expect(state.outcomes["tests"].terminal!.value).toBe(1);
+  });
+
+  test("run-level outcome carries result_agent_ids from detail", () => {
+    const state = reducer(initialState, { type: "event", event: outcome({ channel: "tests", detail: { result_agent_ids: ["a1", "a2"] } }) });
+    expect(state.outcomes["tests"].terminal!.result_agent_ids).toEqual(["a1", "a2"]);
+  });
+
+  test("agent-scoped outcome accumulates per agent", () => {
+    let state = reducer(initialState, { type: "event", event: outcome({ agent_id: "a1", channel: "rubric", stage: "intermediate", value: 0.5, scale: "unit" }) });
+    state = reducer(state, { type: "event", event: outcome({ agent_id: "a1", channel: "rubric", stage: "intermediate", value: 0.25, scale: "unit" }) });
+    expect(state.outcomes["rubric"].perAgent["a1"].value).toBeCloseTo(0.75);
+    expect(state.outcomes["rubric"].perAgent["a1"].count).toBe(2);
+  });
+
+  test("outcome is recorded even when it arrives after agent_complete (no !agent guard)", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
+    const complete: AgentCompleteEvent = { kind: "agent_complete", agent_id: "a1", exit_status: "ok", summary: "", timestamp: 2 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: complete });
+    state = reducer(state, { type: "event", event: outcome({ agent_id: "a1", channel: "rubric", stage: "intermediate", value: 1 }) });
+    expect(state.outcomes["rubric"].perAgent["a1"].value).toBe(1);
+  });
+
+  test("agent_complete persists completed_at and exit_status on the node", () => {
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "x", timestamp: 1 };
+    const complete: AgentCompleteEvent = { kind: "agent_complete", agent_id: "a1", exit_status: "error", summary: "boom", timestamp: 7 };
+    let state = reducer(initialState, { type: "event", event: spawn });
+    expect(state.agents["a1"].completed_at).toBeNull();
+    state = reducer(state, { type: "event", event: complete });
+    expect(state.agents["a1"].completed_at).toBe(7);
+    expect(state.agents["a1"].exit_status).toBe("error");
+  });
+
+  test("outcomes reset to {} on session_start", () => {
+    let state = reducer(initialState, { type: "event", event: outcome({ channel: "tests", value: 1 }) });
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
+    expect(state.outcomes).toEqual({});
   });
 
   test("timeline resets on session_start", () => {

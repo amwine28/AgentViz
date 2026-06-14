@@ -6,7 +6,7 @@ import uuid
 EventKind = Literal[
     "session_start", "agent_spawn", "agent_status", "tool_call_pending",
     "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
-    "command_ack", "usage"
+    "command_ack", "usage", "outcome"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
@@ -102,6 +102,30 @@ class UsageEvent:
     output_tokens: int = 0
     model: str | None = None
     cost_usd: float | None = None
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class OutcomeEvent:
+    kind: Literal["outcome"] = field(default="outcome", init=False)
+    # agent_id=None => run-level (terminal) outcome; routes to the _session seq stream.
+    agent_id: str | None = None
+    channel: str = "reward"           # named reward channel (orthogonal signals)
+    value: float = 0.0                # binary->1.0/0.0; graded->raw; thumbs->+1/-1/0
+    scale: Literal["binary", "unit", "score", "delta"] = "binary"
+    value_min: float | None = None    # optional bounds for "score" normalization
+    value_max: float | None = None
+    stage: Literal["terminal", "intermediate"] = "terminal"
+    # source = WHERE the number came from (a fact, never an LLM opinion). The UI
+    # flags source="llm_judge" as NON-GROUNDED.
+    source: str = "manual"
+    measured: bool = True
+    # detail may carry result_agent_ids: list[str] to declare the sink set explicitly.
+    detail: dict[str, Any] = field(default_factory=dict)
+    # Rung 2/3 replay bookkeeping (inert until persistence lands).
+    run_id: str | None = None
+    ablated_agent_id: str | None = None
+    baseline_run_id: str | None = None
+    baseline_value: float | None = None
     timestamp: float = field(default_factory=_now)
 
 @dataclass

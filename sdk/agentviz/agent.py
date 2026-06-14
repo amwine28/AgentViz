@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .events import (
     AgentSpawnEvent, AgentStatusEvent, AgentCompleteEvent,
     ToolCallPendingEvent, ToolResultEvent, ToolDeniedEvent, LogEvent,
-    UsageEvent, AgentStatus, serialize, _id
+    UsageEvent, OutcomeEvent, AgentStatus, serialize, _id
 )
 from .exceptions import AgentStopped, ToolCallDenied
 
@@ -106,6 +106,28 @@ class Agent:
             output_tokens=output_tokens,
             model=model,
             cost_usd=cost_usd,
+        )))
+
+    async def report_outcome(
+        self,
+        value: float,
+        channel: str = "reward",
+        *,
+        scale: Literal["binary", "unit", "score", "delta"] = "binary",
+        stage: Literal["terminal", "intermediate"] = "intermediate",
+        source: str = "manual",
+        measured: bool = True,
+        value_min: float | None = None,
+        value_max: float | None = None,
+        detail: dict | None = None,
+    ) -> None:
+        """Report a reward/outcome signal scoped to THIS agent. Defaults to an
+        intermediate (per-handoff) signal — feeds credit assignment. The value
+        must come from a verifiable fact (test, eval, metric), never an opinion."""
+        await self._relay.send(serialize(OutcomeEvent(
+            agent_id=self.agent_id, value=value, channel=channel, scale=scale,
+            stage=stage, source=source, measured=measured,
+            value_min=value_min, value_max=value_max, detail=detail or {},
         )))
 
     async def _emit_tool_denied(
