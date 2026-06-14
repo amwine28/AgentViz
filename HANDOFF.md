@@ -38,18 +38,71 @@
       Bug found+fixed: ws re-emits EADDRINUSE on wss → crash; no-op wss error listener
       added so http server's ephemeral-port fallback works (verified: picked 56027).
 
-## Status: OVERHAUL COMPLETE (2026-06-11). Nothing committed to git yet — Aaron decides.
+## Status: OVERHAUL COMPLETE (2026-06-11). Pushed to GitHub 2026-06-14.
 
 ## Post-overhaul additions (2026-06-12)
-- Brightness fix: labels depthTest=false + renderOrder 999 + y=11.5; halo 11u @0.28;
-  bloom 0.45/0.3/0.2 — labels now always readable over glow.
+- Brightness fix: labels depthTest=false + renderOrder 999 + y=11.5; halo 9u @0.18;
+  bloom 0.3/0.25/0.35 (dimmed twice — DO NOT raise) — labels readable over glow.
 - FLOW view (3rd renderer): store.timeline (narrative events, cap 5000, reset on
-  session_start) → flow.ts buildFlowLayout (pure, tested) → FlowView.tsx SVG swimlanes:
-  lanes per agent w/ status dots, spawn branches, cyan message arrows w/ content,
-  tool diamonds (gold=live), ✓/✗ results, completion marks, sticky headers,
-  stick-to-bottom autoscroll. Toggle is now 3D/2D/FLOW, V cycles. 21 ui tests green.
-- Pending idea from Aaron (NOT built): "Architect mode" — design hierarchy by placing
-  spheres in the viz, then Claude Code spawns real agents matching it. Needs design pass.
+  session_start) → flow.ts buildFlowLayout + groupFlowRows (collapsible sections) →
+  FlowView.tsx SVG swimlanes. Toggle is 3D/2D/FLOW, V cycles.
+- Graph analytics: ui/src/graph.ts (pure, tested) — node feature vectors, weighted
+  edges, Brandes betweenness, hub/bottleneck/isolates, NetworkX node-link export.
+  GraphStats.tsx panel (2D view) + ⇩ export button.
+- Efficiency audit: ui/src/audit.ts (pure, tested) — grounded 0-100/A-F score; rules:
+  dead_weight, error_exits, denied_tools, duplicate_roles, token_skew. Every penalty
+  traces to a fact. SDK agent.report_usage() emits `usage` events; store aggregates.
+- Pending idea (NOT built): "Architect mode" — design hierarchy in the viz, Claude Code
+  spawns real agents matching it.
+
+## Shipped to GitHub (2026-06-14)
+- Repo: https://github.com/amwine28/AgentViz (public, MIT). Remote `origin` set, on main.
+- README.md (hero GIF docs/assets/agentviz-demo.gif), LICENSE (MIT), commands/agentviz.md
+  (repo-portable slash command). GIF recorded via headless Playwright → Pillow in an
+  isolated venv (/tmp/gifenv — system Pillow is x86_64-broken on this arm64 box).
+
+## ACTIVE WORKSTREAM: Credit Assignment (started 2026-06-14, "ultracode" build)
+Owner asked to build, from the ground up, very thorough, with cross-session continuity:
+multi-agent CREDIT ASSIGNMENT under sparse reward — attribute a final outcome to the
+agents that earned/caused it across a chain of handoffs. NON-NEGOTIABLE: grounded only
+(graph structure / counterfactual measurement / Shapley axioms), NEVER LLM "rate this
+agent" vibes; confidence intervals over false precision. [[feedback_grounded_over_llm_vibes]]
+
+Design ladder: Rung 1 provenance/reachability (deterministic, observer-only, SHIP FIRST);
+Rung 2 counterfactual leave-one-out via ablation replay (needs re-run engine + N samples/CIs);
+Rung 3 Shapley (DAG-feasible coalitions + Monte-Carlo); Rung 4 reward densification.
+Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
+
+- [x] Design phase DONE (wf_c53a4c8b-d7f, 10 agents/836k tok). docs/credit-assignment.md
+      (689 lines) is the SOURCE OF TRUTH. Adversarial critique found 9 critical/12 major/9
+      minor; revision 2 fixed all 9 critical (Shapley axiom misuse, biased estimator/#P-hard
+      linear-extension sampling, TMC bias, efficiency-residual=0-by-construction, FLOW no-op,
+      ghost-edge filter, sink inference needs completed_at, converging-topology inversion,
+      ingested events bypass seq-stamper). Read §0 changelog + §2/§3 before coding.
+
+  Build plan (8 phases; TDD; A→B→C→D is the Rung-1 shippable slice):
+  - [ ] Phase A — outcome primitive + completion-order fix (events.py OutcomeEvent+EventKind,
+        agent.py/session.py report_outcome, types.ts, store.ts outcome reducer + completed_at/
+        exit_status on AgentNode, FLOW real work in flow.ts+FlowView.tsx). Tests: test_outcome.py.
+  - [ ] Phase B [SHIP] — Rung 1 assignCredit(state) in ui/src/credit.ts (pure peer of
+        audit.ts/graph.ts): ghost-edge filter, Tarjan SCC, sink resolution, reverse-reachability
+        on_critical_path, dominator is_bottleneck, dead_branches, feedback_loops; credit=null/
+        ci=null (structural = necessary-condition claim, NOT causal). Tests: credit.test.ts.
+  - [ ] Phase C [SHIP] — Credit lens (4th view): App.tsx ViewMode + V-cycle, TopBar 4th toggle,
+        CreditView.tsx (facts table, provenance subgraph, honesty header + Rung-1 disclaimer).
+  - [ ] Phase D [SHIP] — ingestion: ui/src/ingest/claudeCode.ts + ingest/otel.ts + relay OTLP
+        receiver; golden fixtures in examples/fixtures/. Lights up real data.
+  - [ ] Phase E — observer→orchestrator infra (run_id, append-only log, re-run engine,
+        dry-run/mock-side-effects). Gates Rungs 2-3.
+  - [ ] Phase F [Rung 2] counterfactual leave-one-out (paired CRN, BCa CI, neutralization modes).
+  - [ ] Phase G [Rung 3] Shapley (Mode A classic / Mode B Faigle-Kern precedence-constrained;
+        TMC=biased; real fresh-sample efficiency check; BH-FDR).
+  - [ ] Phase H [Rung 4] reward densification (PBRS per-handoff; no policy-invariance ranking claim).
+- [ ] Ingestion adapters (= Phase D above).
+- [ ] Rungs 2-4 (= Phases E-H; need orchestrator fork).
+
+NEXT SESSION: read docs/credit-assignment.md (once written) + this section; continue from
+first unchecked box. 502 real CC transcripts live at ~/.claude/projects/-Users-aaronwinegrad/*.jsonl.
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q
