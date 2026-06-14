@@ -11,6 +11,7 @@ export interface OutcomeChannel {
   value_max: number | null;
   terminal: {
     value: number; measured: boolean; source: string; timestamp: number;
+    agent_id: string | null;          // sink scope: null = run-level, else agent-scoped
     result_agent_ids: string[] | null;
   } | null;
   perAgent: Record<string, { value: number; count: number; measured: boolean }>;
@@ -209,12 +210,13 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
         value_min: event.value_min, value_max: event.value_max,
         terminal: null, perAgent: {},
       };
-      if (event.agent_id == null) {
-        // run-level terminal reward: keep the LATEST-timestamp value so that
-        // buffer-replay order and live order converge (deterministic last-write-wins).
+      if (event.agent_id == null || event.stage === "terminal") {
+        // TERMINAL sink reward (run-level if agent_id null, else agent-scoped).
+        // Keep the LATEST-timestamp value so buffer-replay order and live order
+        // converge (deterministic last-write-wins).
         const incoming = {
           value: event.value, measured: event.measured, source: event.source,
-          timestamp: event.timestamp,
+          timestamp: event.timestamp, agent_id: event.agent_id,
           result_agent_ids: Array.isArray((event.detail as { result_agent_ids?: unknown }).result_agent_ids)
             ? ((event.detail as { result_agent_ids: string[] }).result_agent_ids)
             : null,
@@ -224,7 +226,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
           ...ch, scale: event.scale, value_min: event.value_min, value_max: event.value_max, terminal: keep,
         } } };
       }
-      // agent-scoped (intermediate): accumulate per agent, like usage
+      // agent-scoped INTERMEDIATE: accumulate per agent, like usage
       const prev = ch.perAgent[event.agent_id] ?? { value: 0, count: 0, measured: true };
       return { ...state, outcomes: { ...state.outcomes, [event.channel]: {
         ...ch, scale: event.scale,
