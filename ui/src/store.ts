@@ -1,6 +1,14 @@
 import type {
-  AgentVizEvent, AgentNode, MessageEdge, AgentStatus, OutcomeEvent,
+  AgentVizEvent, AgentNode, MessageEdge, AgentStatus, OutcomeEvent, CreditAgentEntry,
 } from "./types";
+
+// One per credit method (counterfactual/shapley/densified); published by a harness.
+export interface CreditReportState {
+  method: string;
+  channel: string;
+  agents: CreditAgentEntry[];
+  timestamp: number;
+}
 
 // One per reward channel; aggregated by the `outcome` reducer case. Consumed by
 // credit.ts (the credit ladder) — the terminal reward to reverse-reach from.
@@ -30,6 +38,7 @@ export interface AppState {
   acks: Record<string, "applied" | "failed">;
   timeline: AgentVizEvent[]; // narrative events in arrival order, for the FLOW view
   outcomes: Record<string, OutcomeChannel>; // key = channel; for credit assignment
+  creditReports: Record<string, CreditReportState>; // key = method; causal credit (Rungs 2-4)
 }
 
 export const initialState: AppState = {
@@ -45,6 +54,7 @@ export const initialState: AppState = {
   acks: {},
   timeline: [],
   outcomes: {},
+  creditReports: {},
 };
 
 const TIMELINE_CAP = 5000;
@@ -113,6 +123,11 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       };
     case "command_ack":
       return { ...state, acks: { ...state.acks, [event.cmd_id]: event.status } };
+    case "credit_report":
+      // externally-computed causal credit (Rungs 2-4), keyed by method (last wins)
+      return { ...state, creditReports: { ...state.creditReports, [event.method]: {
+        method: event.method, channel: event.channel, agents: event.agents, timestamp: event.timestamp,
+      } } };
     case "agent_spawn": {
       const node: AgentNode = {
         id: event.agent_id,

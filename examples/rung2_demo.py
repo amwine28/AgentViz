@@ -44,8 +44,9 @@ def run_workflow(live, k: int) -> float:
     return base + noise
 
 
-async def stream_baseline() -> None:
-    """Show the workflow once in AgentViz so you can watch what is being credited."""
+async def stream_and_report(rows) -> None:
+    """Show the workflow once in AgentViz and publish the measured causal credit so
+    the CREDIT lens surfaces it next to the Rung-1 structural view."""
     s = session(name="rung2 demo: research pipeline")
     await s.connect()
     async with s.agent("planner") as planner:
@@ -55,19 +56,28 @@ async def stream_baseline() -> None:
                                      model="claude-sonnet-4-6", cost_usd=0.02)
                 await s.send_message(name, "planner", f"{name} contributed")
         await s.report_outcome(1.0, channel="answer_quality", source="eval_harness")
+        await s.report_credit(
+            method="counterfactual", channel="answer_quality",
+            agents=[{
+                "agent": r.agent_id, "credit": round(r.credit, 4),
+                "ci": [round(r.ci[0], 4), round(r.ci[1], 4)],
+                "credit_state": r.credit_state, "basis": "measured",
+            } for r in rows],
+        )
     await asyncio.sleep(0.3)
     await s.close()
 
 
 def main() -> None:
-    try:
-        asyncio.run(stream_baseline())
-        print("Streamed a baseline run to AgentViz.\n")
-    except Exception as e:  # relay may be down; the measurement below is independent
-        print(f"(AgentViz stream skipped: {e})\n")
-
     # The actual Rung 2 measurement: re-run each coalition K times, measure deltas.
     rows = counterfactual_credit(AGENTS, run_workflow, samples=300, seed=2026)
+
+    try:
+        asyncio.run(stream_and_report(rows))
+        print("Streamed a baseline run + published causal credit to AgentViz.\n")
+    except Exception as e:  # relay may be down; the table below is independent
+        print(f"(AgentViz stream skipped: {e})\n")
+
     print("Rung 2 — measured causal credit (leave-one-out, 95% CI):")
     print(f"  {'agent':<17}{'credit':>9}{'95% CI':>22}   state")
     print(f"  {'-' * 17}{'-' * 9}{'-' * 22}   {'-' * 18}")

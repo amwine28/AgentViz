@@ -714,6 +714,26 @@ textarea, input { cursor: text; }
 .badge.basis-assumed { color: var(--c-wait); border-color: rgba(255,180,84,0.35); }
 .badge.nocredit { color: var(--ink-faint); }
 
+/* causal credit table (Rungs 2-4) */
+.cftab-head, .cftab-row {
+  display: grid;
+  grid-template-columns: 150px 1.4fr 1fr 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 14px;
+}
+.cftab-head { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); border-bottom: 1px solid var(--line); }
+.cftab-row { border-bottom: 1px solid rgba(125,170,255,0.07); }
+.cf-credit { position: relative; display: flex; align-items: center; gap: 8px; height: 16px; }
+.cf-bar { position: absolute; left: 0; top: 3px; height: 10px; opacity: 0.28; border-radius: 1px; }
+.cf-num { position: relative; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink); font-weight: 600; }
+.cf-ci { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.cstate-estimated { color: var(--c-run); border-color: rgba(63,224,255,0.4); }
+.cstate-tight_null { color: var(--ink-faint); }
+.cstate-low_power_unknown { color: var(--c-wait); border-color: rgba(255,180,84,0.4); }
+.cstate-none { color: var(--ink-dim); }
+.credit-table.causal .panel-title span { color: var(--c-run); }
+
 .credit-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 14px; }
 .dead-chip { font-size: 10px; padding: 3px 8px; border: 1px solid rgba(125,170,255,0.12); color: var(--ink-faint); }
 .loop-chip { font-size: 10px; padding: 3px 8px; border: 1px solid rgba(255,180,84,0.35); color: var(--c-wait); }

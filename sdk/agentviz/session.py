@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from .relay_client import RelayClient
 from .agent import Agent
-from .events import AgentMessageEvent, SessionStartEvent, OutcomeEvent, serialize
+from .events import AgentMessageEvent, SessionStartEvent, OutcomeEvent, CreditReportEvent, serialize
 from typing import Literal
 
 PORT_FILE = Path.home() / ".agentviz" / "relay.json"
@@ -124,6 +124,19 @@ class Session:
             agent_id=None, value=value, channel=channel, scale=scale,
             stage="terminal", source=source, measured=measured,
             value_min=value_min, value_max=value_max, detail=detail or {},
+        )))
+
+    async def report_credit(
+        self,
+        method: Literal["counterfactual", "shapley", "densified"],
+        agents: list[dict],
+        channel: str = "reward",
+    ) -> None:
+        """Publish externally-computed per-agent credit (from a re-run / Shapley /
+        densification harness) so the UI can surface it. The SDK is only transport —
+        the credit values must be measured/axiomatic, never an LLM opinion."""
+        await self.client.send(serialize(CreditReportEvent(
+            method=method, channel=channel, agents=agents,
         )))
 
     def _name_to_id(self, name_or_id: str) -> str | None:

@@ -139,6 +139,18 @@ describe("store reducer", () => {
     expect(state.connected).toBe(true); // connection survives session reset
   });
 
+  test("credit_report records causal credit by method and resets on session_start", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "credit_report", method: "counterfactual", channel: "tests",
+      agents: [{ agent: "retriever", credit: 0.7, ci: [0.69, 0.71], credit_state: "estimated", basis: "measured" }],
+      timestamp: 1,
+    } });
+    expect(state.creditReports["counterfactual"].agents[0].agent).toBe("retriever");
+    expect(state.creditReports["counterfactual"].agents[0].ci).toEqual([0.69, 0.71]);
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
+    expect(state.creditReports).toEqual({});
+  });
+
   test("command_ack records status by cmd_id", () => {
     const state = reducer(initialState, { type: "event", event: { kind: "command_ack", cmd_id: "c-9", status: "applied", timestamp: 1 } });
     expect(state.acks["c-9"]).toBe("applied");

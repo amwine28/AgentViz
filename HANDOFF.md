@@ -154,9 +154,16 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
   ##  - Rung 1: live on real data (CreditView + ingestion).
   ##  - Rung 2: live on safe simulated re-runs (examples/rung2_demo.py).
   ##  - Rung 3/4: estimators done + tested; not yet wired to live v(·)/Φ or surfaced in UI.
-  ## NEXT candidates: (a) surface Rung 2/3/4 results in CreditView (display, safe);
-  ##  (b) observer→orchestrator fork to run Rung 2/3 on REAL agents (needs owner sign-off +
-  ##  dry-run/mock-side-effects safety layer + their re-runnable workflow).
+  ## (a) SURFACING IN UI — DONE. credit_report event (events.py CreditReportEvent +
+  ##     session.report_credit; types.ts + store.creditReports keyed by method, reset on
+  ##     session_start) carries harness-computed causal credit; CreditView renders a
+  ##     "◎ Causal credit — Rung 2/3/4" table (credit bar + 95% CI + state badge) above the
+  ##     Rung-1 structural table. rung2_demo publishes its measured credit. VERIFIED in
+  ##     browser: lens shows Rung-2 causal table + Rung-1 structural together. 95 ui / 33 sdk.
+  ## NEXT (the one remaining big item): (b) observer→orchestrator fork to run Rung 2/3 on
+  ##  REAL agents — needs owner sign-off + dry-run/mock-side-effects safety layer (build+test
+  ##  the safety guarantee FIRST per spec) + their re-runnable workflow. Until then, Rung 2/3
+  ##  run on safe simulated/injected v(·) only.
 - [ ] Ingestion adapters (= Phase D above).
 - [ ] Rungs 2-4 (= Phases E-H; need orchestrator fork).
 

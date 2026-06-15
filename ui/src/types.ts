@@ -3,7 +3,7 @@ export type ViewMode = "3d" | "2d" | "flow" | "credit";
 export type EventKind =
   | "session_start" | "agent_spawn" | "agent_status" | "tool_call_pending"
   | "tool_result" | "tool_denied" | "agent_message" | "log" | "agent_complete"
-  | "command_ack" | "usage" | "outcome";
+  | "command_ack" | "usage" | "outcome" | "credit_report";
 export type CommandKind =
   | "tool_approve" | "tool_deny" | "agent_pause" | "agent_resume"
   | "agent_stop" | "inject_message" | "spawn_agent";
@@ -98,6 +98,20 @@ export interface OutcomeEvent {
   baseline_value: number | null;
   timestamp: number;
 }
+export interface CreditAgentEntry {
+  agent: string;
+  credit: number;
+  ci: [number, number] | null;
+  credit_state: string | null;
+  basis: string;
+}
+export interface CreditReportEvent {
+  kind: "credit_report";
+  method: "counterfactual" | "shapley" | "densified";
+  channel: string;
+  agents: CreditAgentEntry[];
+  timestamp: number;
+}
 export interface AgentCompleteEvent {
   kind: "agent_complete";
   agent_id: string;
@@ -109,7 +123,7 @@ export interface AgentCompleteEvent {
 export type AgentVizEvent = (
   | SessionStartEvent | AgentSpawnEvent | AgentStatusEvent | ToolCallPendingEvent
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
-  | CommandAckEvent | UsageEvent | OutcomeEvent
+  | CommandAckEvent | UsageEvent | OutcomeEvent | CreditReportEvent
 ) & { seq?: number; run_id?: string };
 
 // UI state shapes

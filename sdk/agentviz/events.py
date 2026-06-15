@@ -6,7 +6,7 @@ import uuid
 EventKind = Literal[
     "session_start", "agent_spawn", "agent_status", "tool_call_pending",
     "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
-    "command_ack", "usage", "outcome"
+    "command_ack", "usage", "outcome", "credit_report"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
@@ -126,6 +126,16 @@ class OutcomeEvent:
     ablated_agent_id: str | None = None
     baseline_run_id: str | None = None
     baseline_value: float | None = None
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class CreditReportEvent:
+    kind: Literal["credit_report"] = field(default="credit_report", init=False)
+    # method tags HOW credit was computed (a grounded method, never an LLM opinion).
+    method: Literal["counterfactual", "shapley", "densified"] = "counterfactual"
+    channel: str = "reward"
+    # each entry: {agent, credit, ci:[lo,hi]|None, credit_state|None, basis}
+    agents: list[dict[str, Any]] = field(default_factory=list)
     timestamp: float = field(default_factory=_now)
 
 @dataclass

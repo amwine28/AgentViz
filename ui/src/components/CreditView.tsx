@@ -23,6 +23,10 @@ export function CreditView({ state, onSelectNode }: Props) {
 
   const o = report.outcome;
   const sinkNames = report.sink.ids.map((id) => state.agents[id]?.name ?? id);
+  const causalReports = Object.values(state.creditReports);
+  const methodLabel: Record<string, string> = {
+    counterfactual: "Rung 2 · counterfactual", shapley: "Rung 3 · Shapley", densified: "Rung 4 · densified",
+  };
 
   return (
     <div className="credit-view">
@@ -66,8 +70,37 @@ export function CreditView({ state, onSelectNode }: Props) {
         )}
       </div>
 
+      {causalReports.map((rep) => {
+        const maxAbs = Math.max(1e-9, ...rep.agents.map((a) => Math.abs(a.credit)));
+        return (
+          <div className="credit-table panel causal" key={rep.method}>
+            <div className="panel-title"><span>◎ Causal credit — {methodLabel[rep.method] ?? rep.method} · [{rep.channel}]</span></div>
+            <div className="scroll-area">
+              <div className="cftab-head">
+                <span>agent</span><span>credit</span><span>95% CI</span><span>state</span>
+              </div>
+              {[...rep.agents].sort((a, b) => b.credit - a.credit).map((a) => (
+                <div className="cftab-row" key={a.agent}>
+                  <span className="ctab-name">{a.agent}</span>
+                  <span className="cf-credit">
+                    <span className="cf-bar" style={{
+                      width: `${Math.min(100, Math.abs(a.credit) / maxAbs * 100)}%`,
+                      background: a.credit >= 0 ? "var(--c-run)" : "var(--c-err)",
+                    }} />
+                    <span className="cf-num">{a.credit >= 0 ? "+" : ""}{a.credit.toFixed(3)}</span>
+                  </span>
+                  <span className="cf-ci">{a.ci ? `[${a.ci[0].toFixed(3)}, ${a.ci[1].toFixed(3)}]` : "—"}</span>
+                  <span className={`badge cstate-${a.credit_state ?? "none"}`}>{a.credit_state ?? a.basis}</span>
+                </div>
+              ))}
+            </div>
+            <div className="muted credit-note">measured by re-run / axiomatic decomposition — confident ~0 effects shown as such, never hidden</div>
+          </div>
+        );
+      })}
+
       <div className="credit-table panel">
-        <div className="panel-title"><span>Contributors — {report.contributors.length}</span></div>
+        <div className="panel-title"><span>Contributors (Rung 1 · structural) — {report.contributors.length}</span></div>
         {report.contributors.length === 0 ? (
           <div className="muted credit-empty">no agent output reaches the resolved outcome</div>
         ) : (
