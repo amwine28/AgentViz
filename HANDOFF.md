@@ -127,9 +127,19 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
         agent-*.jsonl + .meta.json). Confirmed schema: assistant msg.content[] tool_use{id,name,
         input}, msg.usage{input_tokens,output_tokens}, msg.id, msg.model; user tool_result
         {tool_use_id,is_error,content}; meta.json {agentType,description,toolUseId}.
-  - [ ] Phase E — observer→orchestrator infra (run_id, append-only log, re-run engine,
-        dry-run/mock-side-effects). Gates Rungs 2-3.
-  - [ ] Phase F [Rung 2] counterfactual leave-one-out (paired CRN, BCa CI, neutralization modes).
+  - [~] Phase E — observer→orchestrator infra. DONE: run_id stamped on every event
+        (session.run_id → relay_client; sdk/tests/test_persistence.py). REMAINING (the
+        ORCHESTRATOR FORK — needs owner decision + their workflow): append-only event log to
+        disk keyed by run_id, re-run engine that re-executes the workflow with an agent
+        ablated, dry-run/mock-side-effects mode. This crosses observer→orchestrator (re-runs
+        real agents = cost/side-effects) — do NOT build silently; confirm with Aaron.
+  - [~] Phase F [Rung 2] — counterfactual ESTIMATOR DONE (the grounded math, no re-execution):
+        ui/src/counterfactual.ts counterfactualCredit(allIds, vFn, opts): paired leave-one-out
+        v(N)-v(N\{i}), seeded bootstrap CI, estimated / tight_null / low_power_unknown,
+        spawn-cascade via liveSetFor, min-K guard. ui/tests/counterfactual.test.ts (8) against
+        injected deterministic+noisy v(·). REMAINING for LIVE Rung 2: wire vFn to a real re-run
+        harness (= the Phase E orchestrator fork) + surface CIs in CreditView. BCa CI (currently
+        percentile bootstrap) is a documented refinement.
   - [ ] Phase G [Rung 3] Shapley (Mode A classic / Mode B Faigle-Kern precedence-constrained;
         TMC=biased; real fresh-sample efficiency check; BH-FDR).
   - [ ] Phase H [Rung 4] reward densification (PBRS per-handoff; no policy-invariance ranking claim).
