@@ -106,6 +106,23 @@ lens will honestly say *"results converge at the orchestrator — reachability i
 here, run counterfactual replay for causal credit"* rather than fabricate per-agent numbers.
 That honesty is the point.
 
+## Ingest from OpenTelemetry (LangGraph, CrewAI, AutoGen, OpenAI Agents SDK…)
+
+Any framework that emits OpenTelemetry GenAI spans (or OpenInference) can stream into
+AgentViz — no SDK wrapping. Start the OTLP receiver and point your tracer's OTLP/HTTP
+exporter at it:
+
+```bash
+cd relay && npm run otel-receiver        # listens on http://localhost:4318/v1/traces
+# then set your app: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+The receiver translates spans into the same event stream (the nearest-enclosing-agent
+walk over `parent_span_id` *is* the handoff DAG), so 3D / 2D / FLOW / CREDIT all work.
+Token usage maps from `gen_ai.usage.*` (and deprecated/OpenInference names); cost is
+taken from instrumentation when present, else derived from a versioned price table,
+else reported as unknown — never guessed.
+
 ## SDK
 
 Wrap any async Python agents. Emission is **fail-open** — a down or slow relay never

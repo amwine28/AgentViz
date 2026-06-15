@@ -111,9 +111,18 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
             real professor-outreach session (308 events) → browser CREDIT lens rendered all
             11 real subagents, honestly flagged the converging feedback loop + assumed root
             sink + "run Rung 2" warning. README "Replay a real Claude Code session" section added.
-        REMAINING Phase D:
-          (2) OTel/OpenInference adapter (ui/src/ingest/otel.ts) + relay POST /v1/traces OTLP/JSON
-              receiver + golden fixtures (spec §5.2). <-- NEXT
+        (2) OTel/OpenInference adapter — DONE. ui/src/ingest/otel.ts (pure translator):
+            OTLP/JSON → events; gen_ai.* + OpenInference (openinference.span.kind,
+            llm.token_count.*, llm.cost.total, graph.node.*); nearest-enclosing-agent walk =
+            handoff DAG; deprecated attr names; cost = instrumentation > versioned price table >
+            null (never guessed); handoff spans → agent_message; per-key seq. Fixtures:
+            otel_openai_agents.json + otel_openinference.json. ui/tests/ingest_otel.test.ts (10).
+            relay/src/otel-receiver.ts: ts-node HTTP bridge, POST /v1/traces (:4318) → translate →
+            forward to relay /sdk (tsconfig EXCLUDES it; npm run otel-receiver). VERIFIED:
+            curl POST fixture → HTTP 200 → 11 events → browser showed "trip-planner" 2 agents.
+            README "Ingest from OpenTelemetry" section added. 75 ui tests green.
+
+  ## Phase D COMPLETE (Claude Code replay + OTel ingest both shipped & verified on real/live data).
         Real CC transcripts: ~/.claude/projects/-Users-aaronwinegrad/*.jsonl (+ <sid>/subagents/
         agent-*.jsonl + .meta.json). Confirmed schema: assistant msg.content[] tool_use{id,name,
         input}, msg.usage{input_tokens,output_tokens}, msg.id, msg.model; user tool_result

@@ -1,0 +1,45 @@
+{
+  "resourceSpans": [
+    {
+      "resource": { "attributes": [{ "key": "service.name", "value": { "stringValue": "langgraph-app" } }] },
+      "scopeSpans": [
+        {
+          "spans": [
+            { "traceId": "t2", "spanId": "oi-root", "name": "planner",
+              "startTimeUnixNano": "1000000000", "endTimeUnixNano": "9000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "openinference.span.kind", "value": { "stringValue": "AGENT" } },
+                { "key": "graph.node.id", "value": { "stringValue": "planner" } }
+              ] },
+            { "traceId": "t2", "spanId": "oi-llm", "parentSpanId": "oi-root", "name": "llm",
+              "startTimeUnixNano": "2000000000", "endTimeUnixNano": "3000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "openinference.span.kind", "value": { "stringValue": "LLM" } },
+                { "key": "llm.token_count.prompt", "value": { "intValue": "500" } },
+                { "key": "llm.token_count.completion", "value": { "intValue": "100" } },
+                { "key": "llm.model_name", "value": { "stringValue": "claude-sonnet-4-6" } },
+                { "key": "llm.cost.total", "value": { "doubleValue": 0.012 } }
+              ] },
+            { "traceId": "t2", "spanId": "oi-tool", "parentSpanId": "oi-root", "name": "retriever",
+              "startTimeUnixNano": "3000000000", "endTimeUnixNano": "3500000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "openinference.span.kind", "value": { "stringValue": "TOOL" } },
+                { "key": "tool.name", "value": { "stringValue": "retriever" } }
+              ] },
+            { "traceId": "t2", "spanId": "oi-worker", "parentSpanId": "oi-root", "name": "worker",
+              "startTimeUnixNano": "4000000000", "endTimeUnixNano": "8000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "openinference.span.kind", "value": { "stringValue": "AGENT" } },
+                { "key": "graph.node.id", "value": { "stringValue": "worker" } },
+                { "key": "graph.node.parent_id", "value": { "stringValue": "planner" } }
+              ] }
+          ]
+        }
+      ]
+    }
+  ]
+}

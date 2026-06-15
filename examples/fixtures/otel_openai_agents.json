@@ -1,0 +1,61 @@
+{
+  "resourceSpans": [
+    {
+      "resource": { "attributes": [{ "key": "service.name", "value": { "stringValue": "trip-planner" } }] },
+      "scopeSpans": [
+        {
+          "spans": [
+            { "traceId": "t1", "spanId": "s-orch", "name": "invoke_agent orchestrator",
+              "startTimeUnixNano": "1000000000", "endTimeUnixNano": "9000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "invoke_agent" } },
+                { "key": "gen_ai.agent.id", "value": { "stringValue": "orch" } },
+                { "key": "gen_ai.agent.name", "value": { "stringValue": "orchestrator" } }
+              ] },
+            { "traceId": "t1", "spanId": "s-llm1", "parentSpanId": "s-orch", "name": "chat gpt-4o",
+              "startTimeUnixNano": "2000000000", "endTimeUnixNano": "3000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "chat" } },
+                { "key": "gen_ai.usage.input_tokens", "value": { "intValue": "1000" } },
+                { "key": "gen_ai.usage.output_tokens", "value": { "intValue": "200" } },
+                { "key": "gen_ai.response.model", "value": { "stringValue": "gpt-4o" } }
+              ] },
+            { "traceId": "t1", "spanId": "s-tool1", "parentSpanId": "s-orch", "name": "execute_tool search",
+              "startTimeUnixNano": "3000000000", "endTimeUnixNano": "4000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "execute_tool" } },
+                { "key": "gen_ai.tool.name", "value": { "stringValue": "search" } },
+                { "key": "gen_ai.tool.call.id", "value": { "stringValue": "call-1" } }
+              ] },
+            { "traceId": "t1", "spanId": "s-handoff", "parentSpanId": "s-orch", "name": "handoff to researcher",
+              "startTimeUnixNano": "4000000000", "endTimeUnixNano": "4100000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "handoff" } },
+                { "key": "gen_ai.agent.id", "value": { "stringValue": "researcher" } }
+              ] },
+            { "traceId": "t1", "spanId": "s-research", "parentSpanId": "s-orch", "name": "invoke_agent researcher",
+              "startTimeUnixNano": "5000000000", "endTimeUnixNano": "8000000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "invoke_agent" } },
+                { "key": "gen_ai.agent.id", "value": { "stringValue": "researcher" } },
+                { "key": "gen_ai.agent.name", "value": { "stringValue": "researcher" } }
+              ] },
+            { "traceId": "t1", "spanId": "s-tool-err", "parentSpanId": "s-research", "name": "execute_tool fetch",
+              "startTimeUnixNano": "6000000000", "endTimeUnixNano": "6500000000",
+              "status": { "code": 2 },
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "execute_tool" } },
+                { "key": "gen_ai.tool.name", "value": { "stringValue": "fetch" } },
+                { "key": "gen_ai.tool.call.id", "value": { "stringValue": "call-2" } }
+              ] }
+          ]
+        }
+      ]
+    }
+  ]
+}

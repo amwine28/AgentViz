@@ -8,6 +8,6 @@
     "esModuleInterop": true
   },
   "include": ["src"],
-  "comment": "replay-claude-code.ts imports the shared ui/ translator across packages and is run via ts-node --transpile-only, never built into dist; exclude it so tsc's rootDir check passes.",
-  "exclude": ["src/replay-claude-code.ts"]
+  "comment": "replay-claude-code.ts and otel-receiver.ts import the shared ui/ translators across packages and run via ts-node --transpile-only, never built into dist; exclude them so tsc's rootDir check passes.",
+  "exclude": ["src/replay-claude-code.ts", "src/otel-receiver.ts"]
 }
