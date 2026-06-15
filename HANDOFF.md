@@ -140,9 +140,23 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
         injected deterministic+noisy v(·). REMAINING for LIVE Rung 2: wire vFn to a real re-run
         harness (= the Phase E orchestrator fork) + surface CIs in CreditView. BCa CI (currently
         percentile bootstrap) is a documented refinement.
-  - [ ] Phase G [Rung 3] Shapley (Mode A classic / Mode B Faigle-Kern precedence-constrained;
-        TMC=biased; real fresh-sample efficiency check; BH-FDR).
-  - [ ] Phase H [Rung 4] reward densification (PBRS per-handoff; no policy-invariance ranking claim).
+  - [x] Phase G [Rung 3] Shapley MATH DONE — ui/src/shapley.ts: classic Shapley (Mode A),
+        exact enumeration (n<=12) + unbiased MC permutation estimator (Fisher-Yates uniform,
+        seeded). ui/tests/shapley.test.ts (6) prove the axioms on closed-form games (additive,
+        unanimity 1/3 each, null-player=0, symmetry, efficiency; MC≈exact). NOT done: Mode B
+        precedence-constrained (Faigle-Kern, different axiom set — documented as out of scope),
+        nested-stochastic v composition with Rung 2, UI surfacing.
+  - [x] Phase H [Rung 4] densification MATH DONE — ui/src/densify.ts: PBRS per-handoff
+        F=γ·Φ(s')−Φ(s); Φ measured, Φ-choice assumed (basis=assumed); NO policy-invariance
+        ranking claim. ui/tests/densify.test.ts (5).
+
+  ## Credit ladder MATH complete (Rungs 1-4 all implemented + tested). LIVE status:
+  ##  - Rung 1: live on real data (CreditView + ingestion).
+  ##  - Rung 2: live on safe simulated re-runs (examples/rung2_demo.py).
+  ##  - Rung 3/4: estimators done + tested; not yet wired to live v(·)/Φ or surfaced in UI.
+  ## NEXT candidates: (a) surface Rung 2/3/4 results in CreditView (display, safe);
+  ##  (b) observer→orchestrator fork to run Rung 2/3 on REAL agents (needs owner sign-off +
+  ##  dry-run/mock-side-effects safety layer + their re-runnable workflow).
 - [ ] Ingestion adapters (= Phase D above).
 - [ ] Rungs 2-4 (= Phases E-H; need orchestrator fork).
 
