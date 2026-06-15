@@ -110,7 +110,7 @@ export type AgentVizEvent = (
   | SessionStartEvent | AgentSpawnEvent | AgentStatusEvent | ToolCallPendingEvent
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
   | CommandAckEvent | UsageEvent | OutcomeEvent
-) & { seq?: number };
+) & { seq?: number; run_id?: string };
 
 // UI state shapes
 export interface AgentNode {

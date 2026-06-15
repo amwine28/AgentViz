@@ -28,6 +28,7 @@ class RelayClient:
         self._queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=MAX_BUFFERED_EVENTS)
         self._pending_send: dict | None = None  # in-flight event retained across reconnects
         self._seq: dict[str, int] = {}
+        self.run_id: str | None = None   # stamped on every event (set by Session)
         self._connected = asyncio.Event()
         self._closing = False
         self._run_task: asyncio.Task | None = None
@@ -49,8 +50,10 @@ class RelayClient:
             logger.warning("Relay not reachable at %s — buffering events", self._uri)
 
     async def send(self, payload: dict[str, Any]) -> None:
-        """Stamp seq, enqueue, return. Never blocks on the network, never raises."""
+        """Stamp seq + run_id, enqueue, return. Never blocks on the network, never raises."""
         self._stamp_seq(payload)
+        if self.run_id is not None:
+            payload["run_id"] = self.run_id
         try:
             self._queue.put_nowait(payload)
         except asyncio.QueueFull:

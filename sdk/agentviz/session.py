@@ -3,6 +3,7 @@ import json
 import subprocess
 import socket
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from .relay_client import RelayClient
@@ -34,6 +35,9 @@ def discover_relay_port() -> int | None:
 class Session:
     def __init__(self, name: str, port: int | None = None, autostart_relay: bool = True):
         self.name = name
+        # Stable id for this run — stamped on every event; the key the future
+        # re-run engine and append-only log are keyed on (Phase E foundation).
+        self.run_id: str = str(uuid.uuid4())
         self._explicit_port = port
         self._autostart = autostart_relay
         self._relay_proc: subprocess.Popen | None = None
@@ -68,6 +72,7 @@ class Session:
                 time.sleep(0.1)
 
         self._client = RelayClient(port=port)
+        self._client.run_id = self.run_id   # stamp run_id on every event, incl. session_start
         self._client.on_command("tool_approve", self._dispatch_tool_approval)
         self._client.on_command("tool_deny", self._dispatch_tool_denial)
         await self._client.connect()
