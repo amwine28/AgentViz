@@ -2,9 +2,20 @@
 
 > Resume protocol: if a session picks this up after a usage-limit cutoff, read this file
 > top to bottom, run the verification commands in "How to verify", and continue from the
-> first unchecked task. The repo is ~/Desktop/AgentViz. CLAUDE.md (AgentViz directive v2)
+> first unchecked task. CLAUDE.md (AgentViz directive v2)
 > governs; owner approved a full autonomous overhaul on 2026-06-11 ("agent viz to the
 > maximum"): 3D world + slash command + reliability spine, no per-task approval needed.
+>
+> REPO MOVED 2026-06-16: now at ~/dev/AgentViz (was ~/Desktop/AgentViz). macOS TCC blocks
+> per-version Claude Code binaries from the Desktop folder — it broke ALL repo access mid-
+> session (getcwd/read EPERM). ~/dev is not TCC-protected, so it can't recur. After any
+> fresh clone/move, run `pip install -e ~/dev/AgentViz/sdk` to re-point the editable SDK.
+>
+> ACTIVE: building the re-run engine (Phase E) — see docs/credit-assignment-phaseE.md.
+> Next: implement SLICE 1 (ablation via _NeutralAgent + _dead_ids cascade; headless re-runs
+> via session.last_outcome; measure_credit_by_rerun harness; in-envelope demo). Build against
+> the REAL SDK signatures (Agent(name, relay, parent_id, dry_run) — the design's Agent(session,..)
+> sketches are wrong; cascade keys on the live parent_id UUID, not name).
 
 ## Mission
 - Spectacular 3D live agent world (3d-force-graph + bloom), 2D/3D toggle, approval queue
