@@ -160,10 +160,18 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
   ##     "◎ Causal credit — Rung 2/3/4" table (credit bar + 95% CI + state badge) above the
   ##     Rung-1 structural table. rung2_demo publishes its measured credit. VERIFIED in
   ##     browser: lens shows Rung-2 causal table + Rung-1 structural together. 95 ui / 33 sdk.
-  ## NEXT (the one remaining big item): (b) observer→orchestrator fork to run Rung 2/3 on
-  ##  REAL agents — needs owner sign-off + dry-run/mock-side-effects safety layer (build+test
-  ##  the safety guarantee FIRST per spec) + their re-runnable workflow. Until then, Rung 2/3
-  ##  run on safe simulated/injected v(·) only.
+  ## (b) observer→orchestrator fork — SAFETY LAYER DONE (the spec gate is cleared):
+  ##   Session(dry_run=True): single choke point in agent.py tool_call — fn executes in dry-run
+  ##   ONLY if side_effect in {pure, live_required} (whitelist; default "external" fails safe;
+  ##   typos/None/replayable mocked). replayable returns replay_value w/o calling fn; agent
+  ##   reasoning runs live. dry_run propagates to nested agents + session_start; ToolResultEvent
+  ##   .simulated; UI ◑ DRY RUN badge + simulated tool flag. sdk/tests/test_dry_run.py (10).
+  ##   ADVERSARIALLY AUDITED (workflow wf_5bf5d4e7-23d, 10 agents): 6 candidate leaks, 0 confirmed
+  ##   — guarantee holds. Threat-model/scope documented in agent.py near _DRY_RUN_EXECUTABLE.
+  ##  REMAINING for live Rung 2/3 on REAL agents (still needs owner sign-off): the re-run ENGINE
+  ##  (Phase E: append-only event log keyed by run_id; re-execute workflow with an agent ablated;
+  ##  rerun_ablation command) + the user's re-runnable workflow. The math (counterfactual.py,
+  ##  shapley.ts) + the safety gate are ready; only the engine that calls them on real agents is left.
 - [ ] Ingestion adapters (= Phase D above).
 - [ ] Rungs 2-4 (= Phases E-H; need orchestrator fork).
 

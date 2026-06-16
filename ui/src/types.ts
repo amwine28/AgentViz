@@ -11,6 +11,7 @@ export type CommandKind =
 export interface SessionStartEvent {
   kind: "session_start";
   name: string;
+  dry_run?: boolean;
   timestamp: number;
 }
 export interface CommandAckEvent {
@@ -47,6 +48,7 @@ export interface ToolResultEvent {
   call_id: string;
   result: unknown;
   duration_ms: number;
+  simulated?: boolean;   // dry-run mock/replay: fn was NOT executed
   timestamp: number;
 }
 export interface ToolDeniedEvent {
@@ -134,7 +136,7 @@ export interface AgentNode {
   status: AgentStatus;
   completed_at: number | null;   // event.timestamp from agent_complete (for sink inference)
   exit_status: string | null;    // raw "ok" | "error" | "stopped"
-  tool_calls: Array<{ call_id: string; name: string; args: Record<string, unknown>; result?: unknown; duration_ms?: number; pending: boolean; denied?: "denied" | "timeout"; requested_at?: number; timeout_s?: number }>;
+  tool_calls: Array<{ call_id: string; name: string; args: Record<string, unknown>; result?: unknown; duration_ms?: number; pending: boolean; denied?: "denied" | "timeout"; simulated?: boolean; requested_at?: number; timeout_s?: number }>;
   logs: Array<{ content: string; level: "info" | "warn" | "error"; timestamp: number }>;
   usage?: { input_tokens: number; output_tokens: number; cost_usd: number };
 }

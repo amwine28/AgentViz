@@ -33,11 +33,15 @@ def discover_relay_port() -> int | None:
 
 
 class Session:
-    def __init__(self, name: str, port: int | None = None, autostart_relay: bool = True):
+    def __init__(self, name: str, port: int | None = None, autostart_relay: bool = True,
+                 dry_run: bool = False):
         self.name = name
         # Stable id for this run — stamped on every event; the key the future
         # re-run engine and append-only log are keyed on (Phase E foundation).
         self.run_id: str = str(uuid.uuid4())
+        # Mock-side-effects re-run mode: agents created here inherit it; external
+        # side-effecting tools are never executed (the safety layer, §6.3).
+        self.dry_run: bool = dry_run
         self._explicit_port = port
         self._autostart = autostart_relay
         self._relay_proc: subprocess.Popen | None = None
@@ -76,7 +80,7 @@ class Session:
         self._client.on_command("tool_approve", self._dispatch_tool_approval)
         self._client.on_command("tool_deny", self._dispatch_tool_denial)
         await self._client.connect()
-        await self._client.send(serialize(SessionStartEvent(name=self.name)))
+        await self._client.send(serialize(SessionStartEvent(name=self.name, dry_run=self.dry_run)))
 
     async def close(self) -> None:
         if self._client:
@@ -86,7 +90,7 @@ class Session:
 
     @asynccontextmanager
     async def agent(self, name: str, parent_id: str | None = None):
-        a = Agent(name=name, relay=self.client, parent_id=parent_id)
+        a = Agent(name=name, relay=self.client, parent_id=parent_id, dry_run=self.dry_run)
         self._agents[a.agent_id] = a
         await a._emit_spawn()
         try:
@@ -158,5 +162,6 @@ class Session:
         return False
 
 
-def session(name: str, port: int | None = None, autostart_relay: bool = True) -> Session:
-    return Session(name=name, port=port, autostart_relay=autostart_relay)
+def session(name: str, port: int | None = None, autostart_relay: bool = True,
+            dry_run: bool = False) -> Session:
+    return Session(name=name, port=port, autostart_relay=autostart_relay, dry_run=dry_run)

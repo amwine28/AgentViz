@@ -134,6 +134,12 @@ textarea, input { cursor: text; }
   max-width: 220px;
 }
 
+.dryrun-chip {
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--c-wait); border: 1px solid rgba(255, 180, 84, 0.5);
+  background: rgba(255, 180, 84, 0.08); padding: 3px 8px; white-space: nowrap;
+}
+
 .topbar-spacer { flex: 1; }
 
 .tb-stat {

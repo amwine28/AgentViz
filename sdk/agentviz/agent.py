@@ -18,12 +18,29 @@ class _ToolDenied(Exception):
     pass
 
 
+# Tool classes that are SAFE to execute during a dry-run re-run. Everything else
+# (external, replayable, unknown, typo'd, unspecified) is NOT executed — a whitelist,
+# so misclassification fails safe rather than leaking a real side effect.
+#
+# Threat model (adversarially audited — 0 confirmed leaks across 6 candidate findings).
+# The guarantee: a tool function routed through tool_call cannot execute in dry-run unless
+# its class is "pure"/"live_required". What it deliberately does NOT cover (honest scope):
+#   - fn invoked OUTSIDE tool_call (the SDK can't see it) — caller responsibility.
+#   - a tool the CALLER mislabels "pure"/"live_required" (executes by their declaration).
+#   - the credit-quality concern that a fixed `replay_value` biases ablation deltas — that
+#     is the classification contract's job + the (future) Rung-2 fresh-sample guardrail,
+#     not this side-effect layer's.
+_DRY_RUN_EXECUTABLE = frozenset({"pure", "live_required"})
+
+
 class Agent:
-    def __init__(self, name: str, relay: "RelayClient", parent_id: str | None = None):
+    def __init__(self, name: str, relay: "RelayClient", parent_id: str | None = None,
+                 dry_run: bool = False):
         self.agent_id: str = _id()
         self.name = name
         self._relay = relay
         self._parent_id = parent_id
+        self._dry_run = dry_run
         self._paused = asyncio.Event()
         self._paused.set()  # not paused by default
         self._stopped = False
@@ -144,7 +161,19 @@ class Agent:
         fn: Callable[[], Any],
         approval_timeout: float = 30.0,
         on_timeout: Literal["deny", "approve"] = "deny",
+        side_effect: Literal["pure", "replayable", "external", "live_required"] = "external",
+        replay_value: Any = None,
     ) -> Any:
+        """Run a tool, gated by human approval and (in dry-run) by the side-effect
+        safety layer. `side_effect` declares the tool's class:
+          pure          — no external side effects, safe to run anytime.
+          replayable    — deterministic external read; in dry-run, returns `replay_value`
+                          (the recorded baseline) WITHOUT executing fn.
+          external      — has side effects (send email, charge, write); in dry-run it is
+                          MOCKED — fn is never executed (DEFAULT, fail-safe).
+          live_required — must execute even in dry-run (explicit opt-in).
+        GUARANTEE: in dry-run, only `pure`/`live_required` fns execute; anything else
+        (incl. unknown/typo'd classes) is never invoked."""
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
         event = ToolCallPendingEvent(
@@ -165,6 +194,16 @@ class Agent:
         except _ToolDenied:
             await self._emit_tool_denied(call_id, name, reason="denied")
             raise ToolCallDenied(call_id=call_id, tool_name=name)
+
+        # ---- side-effect safety choke point (the single place fn can run) ----
+        # Whitelist: execute only when NOT in dry-run, or the tool is explicitly safe.
+        if self._dry_run and side_effect not in _DRY_RUN_EXECUTABLE:
+            result = replay_value if side_effect == "replayable" else None
+            await self._relay.send(serialize(ToolResultEvent(
+                agent_id=self.agent_id, call_id=call_id, result=result,
+                duration_ms=0, simulated=True,
+            )))
+            return result
 
         t0 = time.monotonic()
         result = fn()

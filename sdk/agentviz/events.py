@@ -26,6 +26,7 @@ def _id() -> str:
 class SessionStartEvent:
     kind: Literal["session_start"] = field(default="session_start", init=False)
     name: str = ""
+    dry_run: bool = False   # mock-side-effects re-run mode (no external side effects)
     timestamp: float = field(default_factory=_now)
 
 @dataclass
@@ -67,6 +68,7 @@ class ToolResultEvent:
     call_id: str = ""
     result: Any = None
     duration_ms: int = 0
+    simulated: bool = False   # True => dry-run mock/replay; fn was NOT executed
     timestamp: float = field(default_factory=_now)
 
 @dataclass

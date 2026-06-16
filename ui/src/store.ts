@@ -39,6 +39,7 @@ export interface AppState {
   timeline: AgentVizEvent[]; // narrative events in arrival order, for the FLOW view
   outcomes: Record<string, OutcomeChannel>; // key = channel; for credit assignment
   creditReports: Record<string, CreditReportState>; // key = method; causal credit (Rungs 2-4)
+  dryRun: boolean; // mock-side-effects re-run mode (from session_start)
 }
 
 export const initialState: AppState = {
@@ -55,6 +56,7 @@ export const initialState: AppState = {
   timeline: [],
   outcomes: {},
   creditReports: {},
+  dryRun: false,
 };
 
 const TIMELINE_CAP = 5000;
@@ -119,6 +121,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
         ...initialState,
         connected: state.connected,
         sessionName: event.name,
+        dryRun: event.dry_run ?? false,
         eventCount: 1,
       };
     case "command_ack":
@@ -166,7 +169,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       if (!agent) return state;
       const updated = agent.tool_calls.map((tc) =>
         tc.call_id === event.call_id
-          ? { ...tc, pending: false, result: event.result, duration_ms: event.duration_ms }
+          ? { ...tc, pending: false, result: event.result, duration_ms: event.duration_ms, simulated: event.simulated }
           : tc
       );
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: updated } } };

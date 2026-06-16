@@ -139,6 +139,18 @@ describe("store reducer", () => {
     expect(state.connected).toBe(true); // connection survives session reset
   });
 
+  test("session_start dry_run flag sets store.dryRun; tool_result simulated flag flows through", () => {
+    let state = reducer(initialState, { type: "event", event: { kind: "session_start", name: "x", dry_run: true, timestamp: 1 } });
+    expect(state.dryRun).toBe(true);
+    const spawn: AgentSpawnEvent = { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "w", timestamp: 2 };
+    const tc: ToolCallPendingEvent = { kind: "tool_call_pending", agent_id: "a1", call_id: "c1", name: "send", args: {}, timestamp: 3 };
+    const res: ToolResultEvent = { kind: "tool_result", agent_id: "a1", call_id: "c1", result: null, duration_ms: 0, simulated: true, timestamp: 4 };
+    state = reducer(state, { type: "event", event: spawn });
+    state = reducer(state, { type: "event", event: tc });
+    state = reducer(state, { type: "event", event: res });
+    expect(state.agents["a1"].tool_calls[0].simulated).toBe(true);
+  });
+
   test("credit_report records causal credit by method and resets on session_start", () => {
     let state = reducer(initialState, { type: "event", event: {
       kind: "credit_report", method: "counterfactual", channel: "tests",

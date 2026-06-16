@@ -68,6 +68,7 @@ export function App() {
         eventCount={state.eventCount}
         droppedCount={state.droppedCount}
         view={view}
+        dryRun={state.dryRun}
         onSetView={setView}
         onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
         onStopAll={() => sendCommand({ kind: "agent_stop", agent_id: null })}

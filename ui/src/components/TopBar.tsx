@@ -8,6 +8,7 @@ interface Props {
   eventCount: number;
   droppedCount: number;
   view: ViewMode;
+  dryRun: boolean;
   onSetView: (v: ViewMode) => void;
   onPauseAll: () => void;
   onStopAll: () => void;
@@ -15,12 +16,13 @@ interface Props {
 
 export function TopBar({
   connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
-  view, onSetView, onPauseAll, onStopAll,
+  view, dryRun, onSetView, onPauseAll, onStopAll,
 }: Props) {
   return (
     <div className="topbar">
       <div className="brand">AGENT<b>VIZ</b></div>
       {sessionName && <div className="session-name">{sessionName}</div>}
+      {dryRun && <div className="dryrun-chip" title="Mock-side-effects re-run: external side-effecting tools are not executed">◑ DRY RUN</div>}
 
       <div className="tb-stat">
         <span className={`led ${connected ? "on" : ""}`} />
