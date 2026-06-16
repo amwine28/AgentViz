@@ -7,7 +7,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from .relay_client import RelayClient
-from .agent import Agent
+from .agent import Agent, _NeutralAgent
 from .events import AgentMessageEvent, SessionStartEvent, OutcomeEvent, CreditReportEvent, serialize
 from typing import Literal
 
@@ -47,6 +47,13 @@ class Session:
         self._relay_proc: subprocess.Popen | None = None
         self._client: RelayClient | None = None
         self._agents: dict[str, Agent] = {}
+        # Re-run ablation (set by the re-run engine): which agent NAMES to neutralize,
+        # and the live agent_ids of neutralized agents so their children cascade.
+        self._ablated: set[str] = set()
+        self._dead_ids: set[str] = set()
+        # Run-level terminal reward captured locally (read by the re-run engine after
+        # the workflow returns — first-class, no monkeypatching).
+        self.last_outcome: dict[str, dict] = {}
 
     @property
     def client(self) -> RelayClient:
@@ -58,7 +65,7 @@ class Session:
             return self._explicit_port
         return discover_relay_port() or DEFAULT_PORT
 
-    async def connect(self) -> None:
+    async def connect(self, wait_timeout: float = 2.0) -> None:
         port = self._resolve_port()
         if self._autostart and not _port_open(port):
             relay_dir = str(Path(__file__).parent.parent.parent / "relay")
@@ -79,18 +86,24 @@ class Session:
         self._client.run_id = self.run_id   # stamp run_id on every event, incl. session_start
         self._client.on_command("tool_approve", self._dispatch_tool_approval)
         self._client.on_command("tool_deny", self._dispatch_tool_denial)
-        await self._client.connect()
+        await self._client.connect(wait_timeout=wait_timeout)
         await self._client.send(serialize(SessionStartEvent(name=self.name, dry_run=self.dry_run)))
 
-    async def close(self) -> None:
+    async def close(self, flush_timeout: float = 2.0) -> None:
         if self._client:
-            await self._client.close()
+            await self._client.close(flush_timeout=flush_timeout)
         if self._relay_proc:
             self._relay_proc.terminate()
 
     @asynccontextmanager
     async def agent(self, name: str, parent_id: str | None = None):
-        a = Agent(name=name, relay=self.client, parent_id=parent_id, dry_run=self.dry_run)
+        # Ablation gate: a chosen agent — or any descendant of one (cascade via the
+        # live parent_id UUID) — is neutralized for a counterfactual re-run.
+        ablated = name in self._ablated or (parent_id is not None and parent_id in self._dead_ids)
+        cls = _NeutralAgent if ablated else Agent
+        a = cls(name=name, relay=self.client, parent_id=parent_id, dry_run=self.dry_run)
+        if ablated:
+            self._dead_ids.add(a.agent_id)   # its children cascade
         self._agents[a.agent_id] = a
         await a._emit_spawn()
         try:
@@ -124,6 +137,9 @@ class Session:
         """Report the run-level TERMINAL outcome (the sparse end-of-run reward).
         agent_id=None routes it to the _session seq stream. detail may carry
         result_agent_ids to declare the sink set explicitly for credit assignment."""
+        # Capture locally so the re-run engine can read it after the workflow returns
+        # (works even headless / with no relay).
+        self.last_outcome[channel] = {"value": value, "measured": measured, "source": source}
         await self.client.send(serialize(OutcomeEvent(
             agent_id=None, value=value, channel=channel, scale=scale,
             stage="terminal", source=source, measured=measured,

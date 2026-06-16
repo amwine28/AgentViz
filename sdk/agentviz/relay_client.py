@@ -81,8 +81,8 @@ class RelayClient:
                 return
             await asyncio.sleep(0.02)
 
-    async def close(self) -> None:
-        await self.flush()
+    async def close(self, flush_timeout: float = 2.0) -> None:
+        await self.flush(timeout=flush_timeout)
         self._closing = True
         if self._run_task:
             self._run_task.cancel()

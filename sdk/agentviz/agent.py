@@ -57,6 +57,10 @@ class Agent:
             AgentStatusEvent(agent_id=self.agent_id, status=status)
         ))
 
+    def is_ablated(self) -> bool:
+        """True only for a neutralized agent in a counterfactual re-run (see _NeutralAgent)."""
+        return False
+
     def is_paused(self) -> bool:
         return not self._paused.is_set()
 
@@ -184,16 +188,22 @@ class Agent:
 
         await self._relay.send(serialize(event))
 
-        try:
-            await asyncio.wait_for(future, timeout=approval_timeout)
-        except asyncio.TimeoutError:
+        if self._dry_run:
+            # Automated re-run mode: no human in the loop, so the approval gate is
+            # bypassed. Safety is unaffected — the side-effect choke point below still
+            # mocks anything not in {pure, live_required}.
             self._pending_tool_calls.pop(call_id, None)
-            if on_timeout == "deny":
-                await self._emit_tool_denied(call_id, name, reason="timeout")
+        else:
+            try:
+                await asyncio.wait_for(future, timeout=approval_timeout)
+            except asyncio.TimeoutError:
+                self._pending_tool_calls.pop(call_id, None)
+                if on_timeout == "deny":
+                    await self._emit_tool_denied(call_id, name, reason="timeout")
+                    raise ToolCallDenied(call_id=call_id, tool_name=name)
+            except _ToolDenied:
+                await self._emit_tool_denied(call_id, name, reason="denied")
                 raise ToolCallDenied(call_id=call_id, tool_name=name)
-        except _ToolDenied:
-            await self._emit_tool_denied(call_id, name, reason="denied")
-            raise ToolCallDenied(call_id=call_id, tool_name=name)
 
         # ---- side-effect safety choke point (the single place fn can run) ----
         # Whitelist: execute only when NOT in dry-run, or the tool is explicitly safe.
@@ -226,3 +236,31 @@ class Agent:
         await self._relay.send(serialize(
             AgentCompleteEvent(agent_id=self.agent_id, exit_status=exit_status, summary=summary)
         ))
+
+
+class _NeutralAgent(Agent):
+    """A contribution-suppressing drop-in (re-run ablation). API-compatible with Agent so
+    an unchanged workflow runs without edits. It still spawns/completes (visible in the
+    world) but emits NOTHING peer-visible: tool fns never run, messages/outcome/usage/log
+    are muted. This is the ABLATION gate — orthogonal to the dry_run safety gate. The
+    workflow can additionally check `if a.is_ablated(): ...` to short-circuit the body and
+    its spawn-cascade (the grounded way to remove an agent's contribution)."""
+
+    def is_ablated(self) -> bool:
+        return True
+
+    async def tool_call(self, name, args, fn, *, side_effect="external", replay_value=None, **kw) -> Any:
+        # NEVER invoke fn — this is ablation, not the dry_run safety mock.
+        await self._relay.send(serialize(ToolResultEvent(
+            agent_id=self.agent_id, call_id=_id(), result=None, duration_ms=0, simulated=True,
+        )))
+        return None
+
+    async def report_outcome(self, *a, **k) -> None:  # defensive (C1 forbids agent-scope reward anyway)
+        return None
+
+    async def report_usage(self, *a, **k) -> None:
+        return None
+
+    async def log(self, *a, **k) -> None:
+        return None
