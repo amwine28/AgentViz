@@ -16,10 +16,15 @@
 >   live demo (7a6e46a) measures causal credit by REAL re-execution (every run dry_run-safe).
 >   Slice 3 — acceptance gate / honest-unknown: RerunRefused when baseline reward absent/flaky;
 >   _run_once returns None (not silent 0.0) for no-measurement. 50 sdk tests green.
-> REMAINING slices (all fully local, no wifi/browser needed): Slice 2 (closure live_set_for +
->   Tripwire #1 cascade-integrity); Slice 4 (stochastic CRN + real CIs + budget guard — demo
->   currently deterministic so CIs are points); Slice 5 (relay JSONL recorder keyed by run_id +
->   UI run-branch view). NOTE: commits 1d9ce54/7a6e46a + slice 3 are LOCAL — push pending wifi.
+>   Slice 4 — stochastic CRN + real CIs (84e1902): Session.sample threaded onto each re-run,
+>     shared across baseline+ablation (CRN) so a stochastic workflow yields genuine CIs
+>     (retriever [+0.436,+0.453]); demo made stochastic. Slice 5 persistence — RunRecorder
+>     (relay/src/recorder.ts) tees every event to ~/.agentviz/runs/<run_id>.jsonl (append-only,
+>     keyed by run_id); wired into createRelay + index.ts; 8 relay jest tests.
+> REMAINING: Slice 2 (closure live_set_for + Tripwire #1 cascade-integrity — structural cascade
+>   already works via _dead_ids); Slice 5 UI half (run-branch view: parent_run_id/ablated_agent_id
+>   so baseline + ablation re-runs show as branches). Both fully local. Re-run engine is
+>   functionally COMPLETE: live causal credit + real CIs + honest-unknown gate + durable persistence.
 
 ## Mission
 - Spectacular 3D live agent world (3d-force-graph + bloom), 2D/3D toggle, approval queue

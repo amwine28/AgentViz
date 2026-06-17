@@ -3,11 +3,13 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { createRelay } from "./relay";
+import { RunRecorder } from "./recorder";
 
 const PREFERRED_PORT = parseInt(process.env.AGENTVIZ_PORT ?? "3333", 10);
 const UI_DIST = path.resolve(__dirname, "../../ui/dist");
 const PORT_FILE_DIR = path.join(os.homedir(), ".agentviz");
 const PORT_FILE = path.join(PORT_FILE_DIR, "relay.json");
+const RUNS_DIR = path.join(PORT_FILE_DIR, "runs");   // durable per-run event logs
 
 const MIME: Record<string, string> = {
   ".js": "application/javascript",
@@ -73,7 +75,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-createRelay(server);
+createRelay(server, new RunRecorder(RUNS_DIR));
 
 function writePortFile(port: number): void {
   try {

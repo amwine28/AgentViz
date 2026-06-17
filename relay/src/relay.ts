@@ -1,8 +1,9 @@
 import { WebSocketServer, WebSocket, ServerOptions } from "ws";
 import { IncomingMessage, Server as HttpServer } from "http";
 import { SessionBuffer } from "./buffer";
+import { RunRecorder } from "./recorder";
 
-export function createRelay(portOrServer: number | HttpServer) {
+export function createRelay(portOrServer: number | HttpServer, recorder?: RunRecorder) {
   const buffer = new SessionBuffer();
   const sdkClients = new Set<WebSocket>();
   const browserClients = new Set<WebSocket>();
@@ -34,6 +35,7 @@ export function createRelay(portOrServer: number | HttpServer) {
           if (event && event.kind === "session_start") {
             buffer.clear();
           }
+          recorder?.record(event);   // durable per-run log (Phase E persistence)
           buffer.push(event);
           for (const browser of browserClients) {
             if (browser.readyState === WebSocket.OPEN) {
