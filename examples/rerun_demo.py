@@ -13,6 +13,7 @@ have small marginal credit because the other covers the work — measured, not g
 Run:  python3 examples/rerun_demo.py     (needs a relay up: bash scripts/agentviz.sh)
 """
 import asyncio
+import random
 import sys
 from pathlib import Path
 
@@ -23,6 +24,11 @@ from agentviz.rerun import measure_credit_by_rerun
 
 AGENTS = ["retriever", "reasoner", "backup-reasoner", "verifier", "stylist"]
 OFF_RELAY_PORT = 39871   # re-runs go here (no relay) so they stay headless, off the UI
+
+
+def _jitter(name: str, sample: int) -> float:
+    # reproducible per-(agent, sample) noise -> real confidence intervals, CRN-friendly
+    return random.Random(hash((name, sample)) & 0xFFFFFFFF).gauss(0, 0.03)
 
 
 async def run_workflow(s) -> None:
@@ -50,6 +56,8 @@ async def run_workflow(s) -> None:
         if "verifier" in contributed:
             q += 0.15
         # "stylist" is cosmetic — no effect on answer quality
+        # per-(agent, sample) noise so the measured credit carries a real CI:
+        q += sum(_jitter(name, s.sample) for name in contributed)
         await s.report_outcome(round(q, 4), channel="quality", source="eval_harness")
 
 

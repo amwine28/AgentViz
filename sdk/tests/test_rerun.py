@@ -85,6 +85,31 @@ def test_measure_credit_by_rerun_recovers_contributions():
     assert by["slacker"].credit_state == "tight_null"     # confidently ~0 (idle), not hidden
 
 
+def test_rerun_produces_real_confidence_intervals_for_stochastic_workflow():
+    import random
+    def jitter(name, k):                      # reproducible per-(agent, sample) noise
+        return random.Random(hash((name, k)) & 0xFFFFFFFF).gauss(0, 0.05)
+
+    async def workflow(s):
+        async with s.agent("planner") as p:
+            q = 0.0
+            for name, w in [("worker", 0.5), ("idle", 0.0)]:
+                async with s.agent(name, parent_id=p.agent_id) as a:
+                    if a.is_ablated():
+                        continue
+                    await a.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                    q += w + jitter(name, s.sample)   # s.sample threaded by the engine
+            await s.report_outcome(q, channel="quality", source="eval_harness")
+
+    res = measure_credit_by_rerun(workflow, ["worker", "idle"],
+                                  samples=150, channel="quality", seed=1, publish=False)
+    by = {r.agent_id: r for r in res}
+    w = by["worker"]
+    assert w.ci[1] - w.ci[0] > 0          # a REAL interval, not a [x, x] point
+    assert w.ci[0] < 0.5 < w.ci[1]        # brackets the true contribution
+    assert w.credit_state == "estimated"
+
+
 def test_rerun_refuses_when_no_terminal_outcome():
     # workflow that never reports a terminal reward -> engine refuses (honest-unknown)
     async def workflow(s):

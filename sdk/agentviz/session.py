@@ -54,6 +54,9 @@ class Session:
         # Run-level terminal reward captured locally (read by the re-run engine after
         # the workflow returns — first-class, no monkeypatching).
         self.last_outcome: dict[str, dict] = {}
+        # Sample index for this re-run (set by the engine) — lets a stochastic workflow
+        # be reproducible-but-varied per sample, so counterfactual CIs have real width.
+        self.sample: int = 0
 
     @property
     def client(self) -> RelayClient:

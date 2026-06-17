@@ -26,14 +26,21 @@ from .exceptions import RerunRefused
 Workflow = Callable[[Session], Awaitable[None]]
 
 
-def _run_once(workflow: Workflow, ablated: set[str], channel: str, port: int | None) -> float | None:
+def _run_once(workflow: Workflow, ablated: set[str], channel: str, port: int | None,
+              sample: int = 0) -> float | None:
     """Re-execute the workflow with `ablated` agents neutralized; return the terminal
     reward, or None if the run produced NO measured outcome on `channel` (a dropped
-    sample — never silently treated as 0.0, which would pollute v(N))."""
+    sample — never silently treated as 0.0, which would pollute v(N)).
+
+    `sample` is threaded onto the Session (s.sample) with COMMON RANDOM NUMBERS: the
+    baseline and each ablation share the same sample index, so a stochastic workflow's
+    shared noise cancels in the marginal v(N)-v(N\\{i}) while the ablated agent's own
+    variation survives — giving honest confidence intervals."""
     async def drive() -> float | None:
         s = Session(name=f"rerun ablate={sorted(ablated) or 'none'}", port=port,
                     autostart_relay=False, dry_run=True)
         s._ablated = set(ablated)
+        s.sample = sample
         await s.connect(wait_timeout=0)        # headless: reward is captured locally
         try:
             await workflow(s)
@@ -72,9 +79,9 @@ def measure_credit_by_rerun(
             f"refusing to publish credit grounded on it"
         )
 
-    def v_fn(live_set, _sample):
+    def v_fn(live_set, sample):
         ablated = all_names - set(live_set)
-        r = _run_once(workflow, ablated, channel, port)
+        r = _run_once(workflow, ablated, channel, port, sample)   # CRN: same sample both sides
         if r is None:
             # a coalition dropped its reward post-gate — fail loudly, never fake a 0.0
             raise RerunRefused(
