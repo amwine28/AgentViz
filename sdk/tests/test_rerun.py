@@ -85,6 +85,30 @@ def test_measure_credit_by_rerun_recovers_contributions():
     assert by["slacker"].credit_state == "tight_null"     # confidently ~0 (idle), not hidden
 
 
+def test_rerun_cascade_credits_parent_for_its_descendants():
+    # planner -> lead -> worker. The worker is spawned REGARDLESS of lead's state, so this
+    # exercises the STRUCTURAL cascade (_dead_ids): ablating lead neutralizes worker too,
+    # and lead is credited for the whole subtree (lead 0.2 + cascaded worker 0.4 = 0.6).
+    async def workflow(s):
+        async with s.agent("planner") as p:
+            q = 0.0
+            async with s.agent("lead", parent_id=p.agent_id) as lead:
+                if not lead.is_ablated():
+                    await lead.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                    q += 0.2
+                async with s.agent("worker", parent_id=lead.agent_id) as w:
+                    if not w.is_ablated():               # True via cascade when lead ablated
+                        await w.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                        q += 0.4
+            await s.report_outcome(q, channel="quality", source="eval_harness")
+
+    res = measure_credit_by_rerun(workflow, ["lead", "worker"],
+                                  samples=25, channel="quality", seed=1, publish=False)
+    by = {r.agent_id: r for r in res}
+    assert abs(by["lead"].credit - 0.6) < 0.02     # 0.2 self + 0.4 cascaded worker
+    assert abs(by["worker"].credit - 0.4) < 0.02
+
+
 def test_rerun_produces_real_confidence_intervals_for_stochastic_workflow():
     import random
     def jitter(name, k):                      # reproducible per-(agent, sample) noise
