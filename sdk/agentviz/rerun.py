@@ -26,6 +26,36 @@ from .exceptions import RerunRefused
 Workflow = Callable[[Session], Awaitable[None]]
 
 
+def spawn_closure(roots: set[str], parent_of: dict[str, str]) -> set[str]:
+    """The spawn-feasible closure of `roots`: the roots plus every transitive descendant,
+    using the baseline-observed name->parent map. Ablating a parent removes the cascade
+    it would spawn (§3.2), so the closure is ablated by NAME — robust even if a descendant
+    is re-parented to a live agent at runtime (which would escape the UUID cascade)."""
+    dead = set(roots)
+    changed = True
+    while changed:
+        changed = False
+        for child, parent in parent_of.items():
+            if parent in dead and child not in dead:
+                dead.add(child)
+                changed = True
+    return dead
+
+
+def _probe_topology(workflow: Workflow, channel: str, port: int | None) -> dict[str, str]:
+    """Run the workflow once (baseline, no ablation) to observe its spawn topology
+    (child name -> parent name), used to build the ablation closure."""
+    async def drive() -> dict[str, str]:
+        s = Session(name="rerun-probe", port=port, autostart_relay=False, dry_run=True)
+        await s.connect(wait_timeout=0)
+        try:
+            await workflow(s)
+            return {sp["name"]: sp["parent"] for sp in s._spawns if sp["parent"]}
+        finally:
+            await s.close(flush_timeout=0)
+    return asyncio.run(drive())
+
+
 def _run_once(workflow: Workflow, ablated: set[str], channel: str, port: int | None,
               sample: int = 0) -> float | None:
     """Re-execute the workflow with `ablated` agents neutralized; return the terminal
@@ -79,6 +109,13 @@ def measure_credit_by_rerun(
             f"refusing to publish credit grounded on it"
         )
 
+    # Spawn-closure: ablating an agent also ablates the cascade it would spawn (§3.2).
+    # Built from the baseline topology and ablated by NAME (robust to re-parenting).
+    parent_of = _probe_topology(workflow, channel, port)
+
+    def live_set_for(removed, names):
+        return set(names) - spawn_closure({removed}, parent_of)
+
     def v_fn(live_set, sample):
         ablated = all_names - set(live_set)
         r = _run_once(workflow, ablated, channel, port, sample)   # CRN: same sample both sides
@@ -90,7 +127,8 @@ def measure_credit_by_rerun(
             )
         return r
 
-    results = counterfactual_credit(agent_names, v_fn, samples=samples, seed=seed)
+    results = counterfactual_credit(agent_names, v_fn, samples=samples, seed=seed,
+                                    live_set_for=live_set_for)
 
     if publish:
         async def _publish() -> None:

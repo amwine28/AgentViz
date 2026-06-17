@@ -57,6 +57,9 @@ class Session:
         # Sample index for this re-run (set by the engine) — lets a stochastic workflow
         # be reproducible-but-varied per sample, so counterfactual CIs have real width.
         self.sample: int = 0
+        # Observed spawn topology (for the re-run engine's closure probe): name->parent name.
+        self._id_to_name: dict[str, str] = {}
+        self._spawns: list[dict] = []
 
     @property
     def client(self) -> RelayClient:
@@ -106,7 +109,10 @@ class Session:
         cls = _NeutralAgent if ablated else Agent
         a = cls(name=name, relay=self.client, parent_id=parent_id, dry_run=self.dry_run)
         if ablated:
-            self._dead_ids.add(a.agent_id)   # its children cascade
+            self._dead_ids.add(a.agent_id)   # its children cascade (UUID)
+        self._id_to_name[a.agent_id] = name
+        self._spawns.append({"name": name,
+                             "parent": self._id_to_name.get(parent_id) if parent_id else None})
         self._agents[a.agent_id] = a
         await a._emit_spawn()
         try:

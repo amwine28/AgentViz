@@ -130,8 +130,47 @@ def test_rerun_produces_real_confidence_intervals_for_stochastic_workflow():
     by = {r.agent_id: r for r in res}
     w = by["worker"]
     assert w.ci[1] - w.ci[0] > 0          # a REAL interval, not a [x, x] point
-    assert w.ci[0] < 0.5 < w.ci[1]        # brackets the true contribution
+    assert abs(w.credit - 0.5) < 0.05     # measured near the true contribution (the CI
+                                          # brackets the ESTIMATE, not necessarily exactly 0.5)
     assert w.credit_state == "estimated"
+
+
+def test_spawn_closure_includes_transitive_descendants():
+    from agentviz.rerun import spawn_closure
+    parent_of = {"lead": "planner", "worker": "lead", "sub": "worker", "other": "planner"}
+    assert spawn_closure({"lead"}, parent_of) == {"lead", "worker", "sub"}
+    assert spawn_closure({"planner"}, parent_of) == {"planner", "lead", "worker", "sub", "other"}
+    assert spawn_closure({"other"}, parent_of) == {"other"}
+
+
+def test_closure_neutralizes_a_reparented_descendant():
+    # When 'parent' is ablated, this workflow RE-PARENTS 'child' to the (live) planner to
+    # escape the UUID-based cascade. The name-based closure ablation (built from the baseline
+    # topology) still neutralizes child, so 'parent' is correctly credited for the cascade
+    # (0.6) instead of being under-credited (0.2) by a leak.
+    async def workflow(s):
+        async with s.agent("planner") as p:
+            q = 0.0
+            async with s.agent("parent", parent_id=p.agent_id) as parent:
+                if not parent.is_ablated():
+                    await parent.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                    q += 0.2
+                    async with s.agent("child", parent_id=parent.agent_id) as c:
+                        if not c.is_ablated():
+                            await c.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                            q += 0.4
+                else:
+                    # re-parent to a LIVE agent — would escape the _dead_ids UUID cascade
+                    async with s.agent("child", parent_id=p.agent_id) as c:
+                        if not c.is_ablated():
+                            await c.tool_call(name="t", args={}, fn=lambda: 1, side_effect="pure")
+                            q += 0.4
+            await s.report_outcome(q, channel="quality", source="eval_harness")
+
+    res = measure_credit_by_rerun(workflow, ["parent", "child"],
+                                  samples=25, channel="quality", seed=1, publish=False)
+    by = {r.agent_id: r for r in res}
+    assert abs(by["parent"].credit - 0.6) < 0.02     # cascade preserved despite re-parenting
 
 
 def test_rerun_refuses_when_no_terminal_outcome():
