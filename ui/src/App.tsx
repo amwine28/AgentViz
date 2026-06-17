@@ -11,7 +11,8 @@ import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { GraphStats } from "./components/GraphStats";
 import { CreditView } from "./components/CreditView";
-import type { ViewMode } from "./types";
+import { RunPicker } from "./components/RunPicker";
+import type { ViewMode, AgentVizEvent } from "./types";
 
 // Served by the relay itself in production, so the ws port is our own port.
 // Vite dev server is the only case where we fall back to the default.
@@ -28,7 +29,11 @@ const LEGEND = [
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [view, setView] = useState<ViewMode>("3d");
+  const [showRuns, setShowRuns] = useState(false);
   const sendRef = useRef<((cmd: object) => string) | null>(null);
+
+  const loadRun = useCallback((events: object[]) =>
+    dispatch({ type: "batch_events", events: events as AgentVizEvent[] }), []);
 
   useEffect(() => {
     const conn = createWsConnection(RELAY_PORT, dispatch as (a: { type: string; [key: string]: unknown }) => void);
@@ -70,6 +75,7 @@ export function App() {
         view={view}
         dryRun={state.dryRun}
         onSetView={setView}
+        onOpenRuns={() => setShowRuns(true)}
         onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
         onStopAll={() => sendCommand({ kind: "agent_stop", agent_id: null })}
       />
@@ -128,6 +134,10 @@ export function App() {
         {view === "2d" && <GraphStats state={state} />}
 
         <ApprovalQueue agents={state.agents} acks={state.acks} onCommand={sendCommand} />
+
+        {showRuns && (
+          <RunPicker port={RELAY_PORT} onLoad={loadRun} onClose={() => setShowRuns(false)} />
+        )}
 
         <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>
           {LEGEND.map((l) => (

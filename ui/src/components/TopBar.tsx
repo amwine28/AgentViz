@@ -10,13 +10,14 @@ interface Props {
   view: ViewMode;
   dryRun: boolean;
   onSetView: (v: ViewMode) => void;
+  onOpenRuns: () => void;
   onPauseAll: () => void;
   onStopAll: () => void;
 }
 
 export function TopBar({
   connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
-  view, dryRun, onSetView, onPauseAll, onStopAll,
+  view, dryRun, onSetView, onOpenRuns, onPauseAll, onStopAll,
 }: Props) {
   return (
     <div className="topbar">
@@ -39,6 +40,7 @@ export function TopBar({
       <div className="tb-stat"><span className="num">{agentCount}</span> agents</div>
       <div className="tb-stat"><span className="num">{eventCount.toLocaleString()}</span> events</div>
 
+      <button className="hud-btn" onClick={onOpenRuns} title="Browse & replay recorded runs">⟲ Runs</button>
       <button className="hud-btn" onClick={onPauseAll}>Pause all</button>
       <button className="hud-btn danger" onClick={onStopAll}>Stop all</button>
 

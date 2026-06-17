@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { createRelay } from "./relay";
 import { RunRecorder } from "./recorder";
+import { listRuns, readRun } from "./runs";
 
 const PREFERRED_PORT = parseInt(process.env.AGENTVIZ_PORT ?? "3333", 10);
 const UI_DIST = path.resolve(__dirname, "../../ui/dist");
@@ -35,6 +36,20 @@ const server = http.createServer((req, res) => {
   } catch {
     res.writeHead(400);
     res.end("Bad Request");
+    return;
+  }
+
+  // Recorded-run browse/replay API (before static serving).
+  if (urlPath === "/runs") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(listRuns(RUNS_DIR)));
+    return;
+  }
+  if (urlPath.startsWith("/runs/")) {
+    const events = readRun(RUNS_DIR, urlPath.slice("/runs/".length));
+    if (!events) { res.writeHead(404); res.end("run not found"); return; }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(events));
     return;
   }
 
