@@ -91,6 +91,8 @@ G = nx.node_link_graph(json.load(open("my-run.graph.json")))
 
 ## Credit assignment — which agent actually mattered?
 
+![The CREDIT lens — measured causal credit with confidence intervals](docs/assets/agentviz-credit.png)
+
 Your swarm finishes and you get **one** verdict — tests passed, eval scored 0.9, user said 👍.
 But *which agent earned it?* The one on the obvious path may have added nothing; a quiet one
 may have been decisive. AgentViz answers this **grounded — every number is a measured fact or
