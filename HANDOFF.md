@@ -12,10 +12,14 @@
 > fresh clone/move, run `pip install -e ~/dev/AgentViz/sdk` to re-point the editable SDK.
 >
 > ACTIVE: building the re-run engine (Phase E) — see docs/credit-assignment-phaseE.md.
-> Next: implement SLICE 1 (ablation via _NeutralAgent + _dead_ids cascade; headless re-runs
-> via session.last_outcome; measure_credit_by_rerun harness; in-envelope demo). Build against
-> the REAL SDK signatures (Agent(name, relay, parent_id, dry_run) — the design's Agent(session,..)
-> sketches are wrong; cascade keys on the live parent_id UUID, not name).
+> DONE: Slice 1 (1d9ce54) — _NeutralAgent ablation + _dead_ids cascade + measure_credit_by_rerun;
+>   live demo (7a6e46a) measures causal credit by REAL re-execution (every run dry_run-safe).
+>   Slice 3 — acceptance gate / honest-unknown: RerunRefused when baseline reward absent/flaky;
+>   _run_once returns None (not silent 0.0) for no-measurement. 50 sdk tests green.
+> REMAINING slices (all fully local, no wifi/browser needed): Slice 2 (closure live_set_for +
+>   Tripwire #1 cascade-integrity); Slice 4 (stochastic CRN + real CIs + budget guard — demo
+>   currently deterministic so CIs are points); Slice 5 (relay JSONL recorder keyed by run_id +
+>   UI run-branch view). NOTE: commits 1d9ce54/7a6e46a + slice 3 are LOCAL — push pending wifi.
 
 ## Mission
 - Spectacular 3D live agent world (3d-force-graph + bloom), 2D/3D toggle, approval queue

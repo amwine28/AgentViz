@@ -8,3 +8,8 @@ class AgentStopped(Exception):
     def __init__(self, agent_id: str):
         self.agent_id = agent_id
         super().__init__(f"Agent '{agent_id}' was stopped by the user")
+
+class RerunRefused(Exception):
+    """The re-run engine refuses to ground credit on an absent/flaky reward — honest
+    unknown over confidently-wrong numbers (Phase E acceptance gate)."""
+

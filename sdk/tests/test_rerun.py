@@ -8,6 +8,7 @@ import asyncio
 import pytest
 from agentviz import session
 from agentviz.rerun import measure_credit_by_rerun
+from agentviz.exceptions import RerunRefused
 
 
 @pytest.mark.asyncio
@@ -82,3 +83,23 @@ def test_measure_credit_by_rerun_recovers_contributions():
     assert abs(by["retriever"].credit - 0.5) < 0.02      # measured by re-run, not opinion
     assert abs(by["reasoner"].credit - 0.3) < 0.02
     assert by["slacker"].credit_state == "tight_null"     # confidently ~0 (idle), not hidden
+
+
+def test_rerun_refuses_when_no_terminal_outcome():
+    # workflow that never reports a terminal reward -> engine refuses (honest-unknown)
+    async def workflow(s):
+        async with s.agent("a") as a:
+            await a.tool_call(name="x", args={}, fn=lambda: 1, side_effect="pure")
+        # no s.report_outcome
+    with pytest.raises(RerunRefused):
+        measure_credit_by_rerun(workflow, ["a"], samples=20, channel="quality", seed=1, publish=False)
+
+
+def test_rerun_refuses_when_reward_unmeasured():
+    # an outcome explicitly tagged measured=False is NOT a real measurement
+    async def workflow(s):
+        async with s.agent("a"):
+            pass
+        await s.report_outcome(0.0, channel="quality", measured=False)
+    with pytest.raises(RerunRefused):
+        measure_credit_by_rerun(workflow, ["a"], samples=20, channel="quality", seed=1, publish=False)
