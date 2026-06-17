@@ -146,15 +146,23 @@ credit = measure_langgraph_credit(
 
 A removed node's body genuinely never runs and it merges no state, so downstream nodes feel the real
 consequence of its absence — that delta *is* the causal credit, not a guess. A node that does nothing
-(the cosmetic `stylist` above) is surfaced as a confident **~0**, not hidden. Runnable end-to-end in
-[`examples/langgraph_credit_demo.py`](examples/langgraph_credit_demo.py) (builds a real LangGraph if
-it's installed, else measures on the spec directly).
+(the cosmetic `stylist` above) is surfaced as a confident **~0**, not hidden. Two runnable demos:
+[`examples/langgraph_credit_demo.py`](examples/langgraph_credit_demo.py) (a linear pipeline) and
+[`examples/langgraph_conditional_demo.py`](examples/langgraph_conditional_demo.py) (a **supervisor**
+that routes to one of two specialists) — each builds a real LangGraph if it's installed, else measures
+on the spec directly.
 
-**Honest scope (slice 1):** DAGs with deterministic edges (linear / branching); conditional routing
-that depends on an ablated node's output is the next step. Re-runs re-execute non-ablated node bodies
-— route real side effects through `tool_call(side_effect="external")` (mocked under the engine's
-forced dry-run) or measure on a side-effect-free pipeline. Measuring causal credit costs real re-runs
-(and real tokens) — the honest price of a measured answer over a guessed one.
+**Conditional routing works** (`add_conditional_edges`): a router runs on the live, possibly-ablated
+state, so if removing a node deterministically reroutes the graph, that reroute is measured as the
+**real consequence** of its absence — the honest counterfactual, not a held-fixed path. The un-taken
+branch is correctly a confident ~0. (When that makes a node look superadditive — A worth 0.8, B worth
+0.3, past a 0.8 total — that's real complementarity, which Shapley/Rung 3 deconflates, not a bug.)
+
+**Honest scope:** DAGs (linear, branching, joins, conditional) — cycles / retry loops are the next
+step. Re-runs re-execute non-ablated node bodies, so route real side effects through
+`tool_call(side_effect="external")` (mocked under the engine's forced dry-run) or measure on a
+side-effect-free pipeline. Measuring causal credit costs real re-runs (and real tokens) — the honest
+price of a measured answer over a guessed one.
 
 ## Replay a real Claude Code session
 

@@ -15,9 +15,14 @@ How a node maps:
     its causal credit. Nothing is faked; a removed node genuinely contributes nothing.
   - After the DAG runs, your `reward(final_state)` is reported as the terminal outcome.
 
-Grounding boundaries (honest scope, slice 1):
-  - DAGs with deterministic edges (linear / branching). Conditional routing that depends
-    on an ablated node's output is a documented next step (needs baseline-routing CRN).
+Grounding boundaries (honest scope):
+  - DAGs: linear, branching, joins, AND conditional routing (add_conditional_edges). A
+    router runs on the live, possibly-ablated state, so a deterministic reroute caused by a
+    node's absence is measured as a real consequence — the honest counterfactual. NOT yet:
+    cycles / retry loops (the runner requires a DAG and raises on a cycle).
+  - This measures TOTAL causal effect (let the graph reroute). A "content-only" estimand
+    that holds the orchestration fixed is deliberately different and not the default — it
+    would conceal a real causal pathway; it's a documented opt-in for later.
   - State is merged last-writer-wins (LangGraph's default for un-reduced channels).
     Accumulate inside the node (`{"x": state.get("x",0)+v}`) rather than relying on a
     custom channel reducer in this slice.
@@ -80,46 +85,127 @@ def _topo_order(node_names: list[str], edges: list[tuple[str, str]]):
     return order, succ, preds
 
 
+def _resolve_targets(ret: Any, path_map: dict | None) -> list[str]:
+    """Map a router's return value to a list of target node names. The router may return
+    a key in `path_map`, a target node name directly, or a list of either; sentinels
+    (__end__ etc.) resolve to nothing (that branch terminates)."""
+    raw = list(ret) if isinstance(ret, (list, tuple)) else [ret]
+    out: list[str] = []
+    for v in raw:
+        if path_map and v in path_map:
+            mapped = path_map[v]
+            out.extend(mapped if isinstance(mapped, (list, tuple)) else [mapped])
+        else:
+            out.append(v)                          # a node name returned directly
+    return [t for t in out if t not in _SENTINELS]
+
+
+# A conditional edge: (source_node, router_fn(state)->key|name|list, path_map | None).
+ConditionalEdge = tuple[str, Callable[[dict], Any], "dict | None"]
+
+
 def langgraph_workflow(
     nodes: dict[str, NodeFn],
     edges: list[tuple[str, str]],
     *,
-    entry: Any = None,        # accepted for API symmetry; DAG entry is derived from edges
+    conditional_edges: list[ConditionalEdge] | None = None,
+    entry: Any = None,        # entry node(s); derived from in-degree-0 nodes if omitted
     input: dict | None = None,
     reward: Callable[[dict], float],
     channel: str = "reward",
     reward_source: str = "eval_harness",
 ):
     """Build the `workflow(session)` callable the re-run engine consumes from a LangGraph
-    spec. Each node is an agent; an ablated node's body never runs; `reward(final_state)`
-    is the terminal outcome."""
-    order, _succ, preds = _topo_order(list(nodes), edges)
+    spec. The runner is a frontier-gated DAG traversal: a node runs only when an incoming
+    edge activates it (so conditional branches and joins are honored, not "run everything").
+    Each node is an agent; an ablated node's body never runs (contributes nothing);
+    `reward(final_state)` is the terminal outcome.
+
+    Conditional routing is the HONEST counterfactual: routers run on the live (possibly
+    ablated) state, so if removing a node deterministically reroutes the graph, that
+    rerouting is measured as the real consequence of the node's absence — not hidden. The
+    per-sample CRN already threaded by the engine (s.sample) cancels stochastic NOISE (the
+    only true artifact); a stochastic router should seed on `state["__agentviz_sample__"]`
+    so baseline and ablated share its coin. (A "content-only" mode that holds routes fixed
+    is a deliberately DIFFERENT estimand — see the module docstring — and is not the default,
+    because it would conceal a real causal pathway.)
+
+    Note: a pure router node whose decision lives in the edge `router_fn` (not in its body)
+    shows ~0 content credit — ablating its body changes nothing while the router still runs.
+    Crediting a routing DECISION is a separate counterfactual (documented next step)."""
+    real_names = [n for n in nodes if n not in _SENTINELS]
+    rset = set(real_names)
+    cond_map: dict[str, tuple[Callable[[dict], Any], dict | None]] = {
+        src: (router, pmap) for (src, router, pmap) in (conditional_edges or [])
+    }
+
+    # Full edge set (static + declared conditional targets) → topological order + in-degree.
+    full_edges: list[tuple[str, str]] = [(u, v) for (u, v) in edges if u in rset and v in rset]
+    for src, (_router, pmap) in cond_map.items():
+        for mapped in (pmap or {}).values():
+            for t in (mapped if isinstance(mapped, (list, tuple)) else [mapped]):
+                if t in rset:
+                    full_edges.append((src, t))
+    order, _succ, _preds = _topo_order(real_names, full_edges)
+
+    static_succ: dict[str, list[str]] = {n: [] for n in real_names}
+    for (u, v) in edges:
+        if u in rset and v in rset:
+            static_succ[u].append(v)
+
+    if entry:
+        entry_nodes = [e for e in (entry if isinstance(entry, (list, tuple)) else [entry])
+                       if e in rset]
+    else:
+        indeg = {n: 0 for n in real_names}
+        for (_u, v) in full_edges:
+            indeg[v] += 1
+        entry_nodes = [n for n in real_names if indeg[n] == 0]
 
     async def workflow(s: Session) -> None:
         state = dict(input or {})
-        # Expose the per-run sample index so stochastic nodes can apply Common Random
-        # Numbers (reproducible-but-varied noise) — the engine threads it via s.sample,
-        # giving baseline/ablated pairs shared noise and the CI honest width.
+        # Expose the per-run sample index so stochastic nodes (and routers) can apply Common
+        # Random Numbers (reproducible-but-varied noise) — baseline/ablated pairs share noise,
+        # giving the CI honest width and cancelling noise-driven reroutes.
         state["__agentviz_sample__"] = s.sample
+        active = {n: False for n in real_names}
+        for n in entry_nodes:
+            active[n] = True
+        activated_by: dict[str, list[str]] = {n: [] for n in real_names}
         ids: dict[str, str] = {}
+
         for name in order:
+            if not active[name]:
+                continue                           # not on the taken path this run
             async with s.agent(name) as a:
                 ids[name] = a.agent_id
-                # Draw handoff edges from already-run predecessors (UUIDs, so the live
-                # view connects the right nodes). Headless re-runs have no relay; harmless.
-                for p in preds[name]:
+                # Draw handoff edges from the predecessors that actually activated this node.
+                for p in activated_by[name]:
                     pid = ids.get(p)
                     if pid is not None:
                         await s.client.send(serialize(AgentMessageEvent(
                             from_agent_id=pid, to_agent_id=a.agent_id,
                             content=f"{p} → {name}")))
-                if a.is_ablated():
-                    continue                       # removed node: contributes nothing
-                out = nodes[name](state)
-                if inspect.isawaitable(out):
-                    out = await out
-                if out:
-                    state.update(out)              # last-writer-wins (LangGraph default)
+                if not a.is_ablated():
+                    out = nodes[name](state)
+                    if inspect.isawaitable(out):
+                        out = await out
+                    if out:
+                        state.update(out)          # last-writer-wins (LangGraph default)
+
+                # Routing runs on the live (possibly ablated) state — the honest
+                # counterfactual: a deterministic reroute caused by a node's absence is a
+                # real consequence, not an artifact (noise is cancelled by sample-CRN).
+                if name in cond_map:
+                    router, pmap = cond_map[name]
+                    targets = _resolve_targets(router(state), pmap)
+                else:
+                    targets = static_succ[name]
+                for t in targets:
+                    if t in active:
+                        active[t] = True
+                        activated_by[t].append(name)
+
         await s.report_outcome(float(reward(state)), channel=channel, source=reward_source)
 
     return workflow
@@ -129,6 +215,7 @@ def measure_langgraph_credit(
     nodes: dict[str, NodeFn],
     edges: list[tuple[str, str]],
     *,
+    conditional_edges: list[ConditionalEdge] | None = None,
     entry: Any = None,
     input: dict | None = None,
     reward: Callable[[dict], float],
@@ -143,9 +230,12 @@ def measure_langgraph_credit(
 ) -> list[CounterfactualResult]:
     """Measure each LangGraph node's grounded counterfactual credit by re-running the
     pipeline with that node ablated. Thin wrapper over the verified re-run engine — the
-    credit numbers are measured reward deltas with confidence intervals, never opinions."""
-    wf = langgraph_workflow(nodes, edges, entry=entry, input=input, reward=reward,
-                            channel=channel, reward_source=reward_source)
+    credit numbers are measured reward deltas with confidence intervals, never opinions.
+    Conditional edges are honored with routing-CRN (the baseline path is replayed under
+    ablation, so credit reflects content, not rerouting)."""
+    wf = langgraph_workflow(nodes, edges, conditional_edges=conditional_edges, entry=entry,
+                            input=input, reward=reward, channel=channel,
+                            reward_source=reward_source)
     names = list(agent_names) if agent_names is not None else [
         n for n in nodes if n not in _SENTINELS
     ]

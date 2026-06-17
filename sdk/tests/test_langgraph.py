@@ -119,6 +119,57 @@ async def test_sample_injected_into_state_for_crn(unused_tcp_port):
     assert seen["sample"] == 7
 
 
+@pytest.mark.asyncio
+async def test_conditional_routing_takes_only_the_chosen_branch(unused_tcp_port):
+    # A routes to B (per its output); C is the un-taken branch and must NEVER run.
+    ran = {"c": 0}
+
+    def c(st):
+        ran["c"] += 1
+        return {"score": st.get("score", 0) + 99.0}     # would wreck reward if taken
+
+    nodes = {
+        "a": lambda st: {"score": 0.5, "route": "go_b"},
+        "b": lambda st: {"score": st.get("score", 0) + 0.3},
+        "c": c,
+        "d": lambda st: {"score": st.get("score", 0) + 0.1},
+    }
+    edges = [("b", "d"), ("c", "d")]
+    cond = [("a", lambda st: st.get("route", "go_c"), {"go_b": "b", "go_c": "c"})]
+    wf = langgraph_workflow(nodes, edges, conditional_edges=cond, entry=["a"],
+                            reward=lambda st: st.get("score", 0.0), channel="q")
+    s = session(name="t", port=unused_tcp_port, autostart_relay=False, dry_run=True)
+    await s.connect(wait_timeout=0)
+    await wf(s)
+    await s.close(flush_timeout=0)
+    assert ran["c"] == 0                                  # un-taken branch skipped
+    assert abs(s.last_outcome["q"]["value"] - 0.9) < 1e-9  # A 0.5 + B 0.3 + D 0.1
+
+
+def test_conditional_reroute_under_ablation_is_a_real_consequence():
+    # A sets the route to B and adds 0.5; the router reads A's output. Ablating A removes
+    # its content AND (deterministically) reroutes to C — the HONEST counterfactual: A is
+    # load-bearing, so its measured credit is the full drop (0.8 = its 0.5 + the lost B 0.3),
+    # not a route-held 0.5. The superadditivity (A 0.8 + B 0.3 > 0.8 total) is the real
+    # complementarity signal that Shapley (Rung 3) exists to deconflate — not papered over.
+    nodes = {
+        "a": lambda st: {"score": st.get("score", 0) + 0.5, "route": "go_b"},
+        "b": lambda st: {"score": st.get("score", 0) + 0.3},
+        "c": lambda st: {"score": st.get("score", 0) + 0.0},
+    }
+    edges = []  # b and c exist only as conditional targets of a
+    cond = [("a", lambda st: st.get("route", "go_c"), {"go_b": "b", "go_c": "c"})]
+    res = measure_langgraph_credit(
+        nodes, edges, conditional_edges=cond, entry=["a"], input={},
+        reward=lambda st: st.get("score", 0.0), channel="q",
+        samples=25, seed=1, publish=False,
+    )
+    by = {r.agent_id: r for r in res}
+    assert abs(by["a"].credit - 0.8) < 0.02       # load-bearing: removing A reroutes + loses B
+    assert abs(by["b"].credit - 0.3) < 0.02       # B's own content (A still routes to it)
+    assert by["c"].credit_state == "tight_null"   # never on the taken path in baseline
+
+
 def test_topology_from_compiled_duck_typed():
     # A stub mimicking the stable public surface of a LangGraph CompiledStateGraph:
     # .get_graph() -> object with .nodes (dict) and .edges (list of source/target).

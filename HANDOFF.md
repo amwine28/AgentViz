@@ -221,12 +221,30 @@ fleet / worked-example): meet users where they are = LangGraph (largest agent-fr
   installed) AND the measurement. VERIFIED end-to-end with langgraph actually installed: real
   graph invoked (score 0.791), topology extracted, credit recovered (+0.451/+0.301/+0.148/0.000).
 - README "## Measure credit on your LangGraph — no hand-wrapping" + nav link.
-- Honest scope (slice 1): DAGs / deterministic edges (conditional routing = next step); state
-  merge is last-writer-wins (accumulate in-node); re-runs re-execute non-ablated bodies (route
-  external side effects through tool_call(side_effect="external") — engine forces dry_run).
-- NEXT candidates if continuing the usability arc: (1) conditional-routing support via baseline-
-  routing CRN capture; (2) actionable output (prune tight_null nodes w/ $/token saved, merge
-  Shapley-redundant pairs, CI regression mode); (3) a CrewAI adapter (same bridge shape).
+
+SLICE 2 (2026-06-17, same session): CONDITIONAL ROUTING. Executor rewritten from "topo-order,
+run every node" to FRONTIER-GATED traversal: a node runs only when an incoming edge activates it,
+so static branching + joins + add_conditional_edges + un-taken branches all honored. The runner
+takes `conditional_edges=[(source, router_fn, path_map)]`; router runs on the LIVE (possibly
+ablated) state. IMPORTANT rigor call: initially built "routing-CRN" (replay baseline branch under
+ablation) but RIPPED IT OUT — it changes the estimand and HIDES a real causal pathway (a
+deterministic reroute caused by a node's absence is a REAL consequence, not an artifact; only NOISE
+is an artifact, and sample-CRN already cancels that). Default = honest TOTAL causal effect; a
+"content-only" route-holding estimand is a documented opt-in, NOT default. Tests (8 total, +2):
+conditional takes only chosen branch; ablating a router-feeding node reroutes + is load-bearing
+(A=0.8 not route-held 0.5, B=0.3, un-taken C tight_null — superadditivity = real complementarity
+for Shapley/Rung3 to deconflate). examples/langgraph_conditional_demo.py (supervisor→specialist
+pattern) VERIFIED on real langgraph w/ add_conditional_edges + TypedDict state (routed research,
+credit research 0.499 / writer 0.298 / classifier 0.203 / code_specialist tight_null). SDK 60→62.
+NOTE: a pure-router node whose decision lives in the edge router_fn shows ~0 CONTENT credit
+(ablating its body changes nothing) — crediting a routing DECISION is a separate counterfactual.
+- Honest scope NOW: DAGs (linear/branching/joins/conditional) — cycles/retry loops are next.
+  State merge last-writer-wins per key (matches a TypedDict LangGraph schema; NOT StateGraph(dict)
+  which root-replaces). Re-runs re-execute non-ablated bodies (route side effects via tool_call).
+- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) actionable
+  output (prune tight_null nodes w/ $/token saved, merge Shapley-redundant pairs, CI regression
+  mode) — the "use it twice" play; (3) a CrewAI adapter (same bridge shape); (4) opt-in route-held
+  content-only estimand for routers.
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q
