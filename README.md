@@ -10,7 +10,7 @@
 your approval is an unmissable golden ring. Toggle to a clean 2D graph the moment
 you need to actually debug.*
 
-[Quickstart](#quickstart) · [The four views](#the-four-views) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
+[Quickstart](#quickstart) · [The four views](#the-four-views) · [Credit assignment](#credit-assignment--which-agent-actually-mattered) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
 
 </div>
 
@@ -27,6 +27,8 @@ where structure, timing, and stalls are obvious at a glance.
 - **2D is the instrument** — a stable graph for serious debugging.
 - **FLOW is the story** — a swimlane transcript of who said what, in what order.
 - **The audit is the verdict** — a rule-based efficiency score, never a vibe.
+- **Credit assignment is the answer** — which agent actually earned the outcome, *measured*
+  by re-running with it removed (counterfactual), never an LLM opinion.
 
 Everything renders from a single event stream. Point any Python agents at it, or
 drop `/agentviz` into a Claude Code session.
@@ -86,6 +88,36 @@ import json, networkx as nx
 G = nx.node_link_graph(json.load(open("my-run.graph.json")))
 # every agent run is now a graph dataset: feed it to NetworkX, PyTorch Geometric, anything.
 ```
+
+## Credit assignment — which agent actually mattered?
+
+Your swarm finishes and you get **one** verdict — tests passed, eval scored 0.9, user said 👍.
+But *which agent earned it?* The one on the obvious path may have added nothing; a quiet one
+may have been decisive. AgentViz answers this **grounded — every number is a measured fact or
+an axiom, never an LLM "rate this agent 0–100" opinion**, and when the data can't tell, it says
+so. Report an outcome and open the **CREDIT** lens. It's a ladder, cheap → rigorous:
+
+- **Rung 1 — structural** *(live):* reverse-reachability + dominators over the handoff graph —
+  *could* an agent's output even reach the result, and is it a structural bottleneck. Cheap;
+  "necessary," not "caused." On real converging swarms it honestly says "reachability is
+  near-useless here, run a counterfactual."
+- **Rung 2 — counterfactual replay** *(live):* **re-run the workflow with an agent removed and
+  measure how much the outcome drops.** That delta *is* its causal credit — with a confidence
+  interval from repeated runs, not a fake point number. Every re-run is forced through a
+  **dry-run safety layer** (adversarially audited, 0 leaks) that mocks real side effects, so
+  measuring credit never sends a duplicate email or charges a card twice.
+- **Rung 3 — Shapley** & **Rung 4 — densification** *(built):* fair credit under redundancy
+  (two agents that cover each other), and spreading the sparse end-reward into per-step credit.
+
+```python
+from agentviz.rerun import measure_credit_by_rerun   # Rung 2, live
+credit = measure_credit_by_rerun(my_workflow, ["retriever", "reasoner", "verifier"],
+                                 samples=200, channel="answer_quality")
+# -> retriever +0.45 [0.44,0.46] estimated · verifier +0.15 · reasoner +0.03 (redundant) ...
+```
+
+It even *measures redundancy*: if a reasoner and a backup-reasoner cover each other, each shows
+small individual credit — discovered, not guessed. See [`docs/credit-assignment.md`](docs/credit-assignment.md).
 
 ## Replay a real Claude Code session
 
