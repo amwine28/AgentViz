@@ -10,7 +10,7 @@
 your approval is an unmissable golden ring. Toggle to a clean 2D graph the moment
 you need to actually debug.*
 
-[Quickstart](#quickstart) · [The four views](#the-four-views) · [Credit assignment](#credit-assignment--which-agent-actually-mattered) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
+[Quickstart](#quickstart) · [The four views](#the-four-views) · [Credit assignment](#credit-assignment--which-agent-actually-mattered) · [LangGraph](#measure-credit-on-your-langgraph--no-hand-wrapping) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
 
 </div>
 
@@ -120,6 +120,41 @@ credit = measure_credit_by_rerun(my_workflow, ["retriever", "reasoner", "verifie
 
 It even *measures redundancy*: if a reasoner and a backup-reasoner cover each other, each shows
 small individual credit — discovered, not guessed. See [`docs/credit-assignment.md`](docs/credit-assignment.md).
+
+## Measure credit on your LangGraph — no hand-wrapping
+
+Already built a [LangGraph](https://github.com/langchain-ai/langgraph) pipeline? Point AgentViz at
+the **same spec you already wrote** — your `nodes` dict and `edges` list — and get measured
+counterfactual credit per node. No SDK wrapping, no reimplementation: the adapter turns your graph
+into the re-run workflow the engine consumes, runs it with each node ablated, and measures the drop.
+
+```python
+from agentviz.integrations.langgraph import measure_langgraph_credit
+
+NODES = {"retriever": retrieve, "reasoner": reason, "verifier": verify, "stylist": polish}
+EDGES = [("retriever", "reasoner"), ("reasoner", "verifier"), ("verifier", "stylist")]
+# ^ the same dict + list you pass to StateGraph.add_node / add_edge
+
+credit = measure_langgraph_credit(
+    NODES, EDGES,
+    input={"question": "..."},
+    reward=lambda final_state: float(final_state["eval_score"]),  # YOUR eval, the ground truth
+    samples=200,
+)
+# retriever +0.45 [0.44,0.46] estimated · reasoner +0.30 · verifier +0.15 · stylist ~0.00 (tight_null)
+```
+
+A removed node's body genuinely never runs and it merges no state, so downstream nodes feel the real
+consequence of its absence — that delta *is* the causal credit, not a guess. A node that does nothing
+(the cosmetic `stylist` above) is surfaced as a confident **~0**, not hidden. Runnable end-to-end in
+[`examples/langgraph_credit_demo.py`](examples/langgraph_credit_demo.py) (builds a real LangGraph if
+it's installed, else measures on the spec directly).
+
+**Honest scope (slice 1):** DAGs with deterministic edges (linear / branching); conditional routing
+that depends on an ablated node's output is the next step. Re-runs re-execute non-ablated node bodies
+— route real side effects through `tool_call(side_effect="external")` (mocked under the engine's
+forced dry-run) or measure on a side-effect-free pipeline. Measuring causal credit costs real re-runs
+(and real tokens) — the honest price of a measured answer over a guessed one.
 
 ## Replay a real Claude Code session
 

@@ -11,7 +11,10 @@
 > session (getcwd/read EPERM). ~/dev is not TCC-protected, so it can't recur. After any
 > fresh clone/move, run `pip install -e ~/dev/AgentViz/sdk` to re-point the editable SDK.
 >
-> ACTIVE: building the re-run engine (Phase E) — see docs/credit-assignment-phaseE.md.
+> ACTIVE (2026-06-17): USABILITY pivot — making the analytic reach real users. Re-run engine
+> is COMPLETE; live Rung-2 credit now works on a REAL framework via the LangGraph adapter
+> (see "## USABILITY" section below). Earlier active workstream was the re-run engine (Phase E,
+> now done) — see docs/credit-assignment-phaseE.md.
 > DONE: Slice 1 (1d9ce54) — _NeutralAgent ablation + _dead_ids cascade + measure_credit_by_rerun;
 >   live demo (7a6e46a) measures causal credit by REAL re-execution (every run dry_run-safe).
 >   Slice 3 — acceptance gate / honest-unknown: RerunRefused when baseline reward absent/flaky;
@@ -197,6 +200,33 @@ Rungs 2-3 require observer→orchestrator + dry-run/mock-side-effects mode.
 
 NEXT SESSION: read docs/credit-assignment.md (once written) + this section; continue from
 first unchecked box. 502 real CC transcripts live at ~/.claude/projects/-Users-aaronwinegrad/*.jsonl.
+
+## USABILITY: LangGraph adapter (2026-06-17) — live Rung-2 credit on a real framework
+Owner: "we have a detailed analytic… I want this to have actual useability." The gap: the
+rigorous credit tiers need a live, re-runnable, dry-run-safe, SDK-wrapped workflow — which
+almost no real user has. The adoption play (owner-chosen over actionable-output / observational-
+fleet / worked-example): meet users where they are = LangGraph (largest agent-framework base).
+- sdk/agentviz/integrations/langgraph.py — THIN bridge, zero `langgraph` import dependency:
+  consumes the SAME declarative spec you pass to StateGraph (a `nodes` dict + `edges` list),
+  turns it into the `workflow(session)` the verified re-run engine consumes. Each node → an
+  agent; an ABLATED node's body never runs and merges no state → downstream sees the real
+  consequence (grounded counterfactual). reward(final_state) → terminal outcome. Public API:
+  `measure_langgraph_credit(nodes, edges, *, input, reward, samples=…, …)`, `langgraph_workflow`,
+  `topology_from_compiled(compiled)` (duck-typed `.get_graph()` extraction, sentinels dropped).
+  Reserved state key `__agentviz_sample__` injects the per-run sample for CRN (stochastic CIs).
+- sdk/tests/test_langgraph.py (6, TDD) — linear pipeline reward, ablated-body-never-runs,
+  credit recovery (0.5/0.3/0.15 + idle tight_null), async+branching DAG, CRN sample injection,
+  topology_from_compiled vs a stub. Full SDK suite 54 → 60 green.
+- examples/langgraph_credit_demo.py — same NODES/EDGES drive a REAL StateGraph (if langgraph
+  installed) AND the measurement. VERIFIED end-to-end with langgraph actually installed: real
+  graph invoked (score 0.791), topology extracted, credit recovered (+0.451/+0.301/+0.148/0.000).
+- README "## Measure credit on your LangGraph — no hand-wrapping" + nav link.
+- Honest scope (slice 1): DAGs / deterministic edges (conditional routing = next step); state
+  merge is last-writer-wins (accumulate in-node); re-runs re-execute non-ablated bodies (route
+  external side effects through tool_call(side_effect="external") — engine forces dry_run).
+- NEXT candidates if continuing the usability arc: (1) conditional-routing support via baseline-
+  routing CRN capture; (2) actionable output (prune tight_null nodes w/ $/token saved, merge
+  Shapley-redundant pairs, CI regression mode); (3) a CrewAI adapter (same bridge shape).
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q
