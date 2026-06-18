@@ -17,6 +17,7 @@ confidence intervals real width.
 import random
 
 from agentviz.integrations.langgraph import measure_langgraph_credit, topology_from_compiled
+from agentviz.recommend import recommend, format_recommendations
 
 
 def _crn(name: str, state: dict, sd: float = 0.03) -> float:
@@ -112,6 +113,14 @@ def main() -> None:
         print(f"{r.agent_id:<22}{r.credit:>+9.3f}   {ci:<18}{r.credit_state}")
     print("\ncode_specialist is ~0 (tight_null) — it never ran on the 'research' route. "
           "Honest, not hidden.")
+
+    recs = recommend(results, total_reward=1.0, channel="answer_quality")
+    print("\n── Recommendations ───────────────────────────────────────")
+    print(format_recommendations(recs))
+    print("\nNote the honesty: code_specialist is flagged a prune CANDIDATE, but the action says "
+          "'review / verify', not 'delete' —\nit's tight_null only on THIS research query; it's "
+          "essential for code queries. The measurement answers one\nreward channel; the human owns "
+          "the decision. That caveat is the whole point.")
 
 
 if __name__ == "__main__":

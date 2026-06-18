@@ -241,10 +241,23 @@ NOTE: a pure-router node whose decision lives in the edge router_fn shows ~0 CON
 - Honest scope NOW: DAGs (linear/branching/joins/conditional) — cycles/retry loops are next.
   State merge last-writer-wins per key (matches a TypedDict LangGraph schema; NOT StateGraph(dict)
   which root-replaces). Re-runs re-execute non-ablated bodies (route side effects via tool_call).
-- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) actionable
-  output (prune tight_null nodes w/ $/token saved, merge Shapley-redundant pairs, CI regression
-  mode) — the "use it twice" play; (3) a CrewAI adapter (same bridge shape); (4) opt-in route-held
-  content-only estimand for routers.
+SLICE 3 (2026-06-18, same session): ACTIONABLE OUTPUT — the "use it twice" play. sdk/agentviz/
+recommend.py (CORE, not langgraph-specific — operates on CounterfactualResult): recommend(results,
+*, cost_by_node, total_reward, baseline, channel, spof_fraction=0.7, regression_drop=0.1) ->
+list[Recommendation(rule, severity, agents, action, rationale, savings_usd)]. GROUNDED rules, each
+traces to a measured fact: prune_candidate (tight_null + $/run saved), single_point_of_failure
+(estimated credit >= spof_fraction*total_reward), increase_samples (low_power_unknown), regression
+(vs baseline: confident drop = drop>=threshold AND CIs DON'T overlap — noise-overlap NOT flagged).
+Healthy node => NO rec (silence = nothing to act on). Every action says "review/verify" not "delete"
+(measures one reward channel; human owns the call). format_recommendations() for CLI/email/report.
+sdk/tests/test_recommend.py (7, TDD). Both langgraph demos now print recommendations; the conditional
+demo's code_specialist (tight_null on a research query) is a deliberate honesty lesson — flagged a
+prune CANDIDATE w/ the "needed for another objective?" caveat (it's essential for code queries).
+README "### From measurement to decision". SDK 62 -> 69.
+- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) UI surfacing
+  of recommendations (credit_report event could carry them; CreditView renders an action list);
+  (3) a CrewAI adapter (same bridge shape); (4) opt-in route-held content-only estimand for routers;
+  (5) redundancy/merge recs need coalition data (Shapley/Rung 3) — single-LOO can't prove it (honest).
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q

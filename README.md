@@ -164,6 +164,33 @@ step. Re-runs re-execute non-ablated node bodies, so route real side effects thr
 side-effect-free pipeline. Measuring causal credit costs real re-runs (and real tokens) — the honest
 price of a measured answer over a guessed one.
 
+### From measurement to decision
+
+A credit number is only useful if you act on it. `recommend()` turns the measured results into
+concrete, **grounded** recommendations — every one traces to a measured fact (the confidence-interval
+verdict, the CI, the cost), never an opinion:
+
+```python
+from agentviz.recommend import recommend, format_recommendations
+
+recs = recommend(credit, cost_by_node=cost_per_run, total_reward=0.9, channel="answer_quality")
+print(format_recommendations(recs))
+# ▲ [prune_candidate] stylist (~$0.0060/run)
+#   → Review 'stylist' for removal — contributes ~0 to answer_quality while costing $0.0060/run.
+#     Verify it isn't needed for another objective, latency, or safety.
+```
+
+- **`prune_candidate`** — a `tight_null` node (confidently ~0), with the $/run you'd save.
+- **`single_point_of_failure`** — a node whose measured contribution is most of the reward; harden it.
+- **`regression`** — against a prior measurement, a node whose contribution *confidently* dropped
+  (the CIs don't overlap — drops within noise are **not** flagged). A CI-gate for agent pipelines.
+- **`increase_samples`** — where the signal is undetermined: don't act, measure more.
+
+A healthy node yields **no** recommendation — silence means "nothing to act on," not "not analyzed."
+And every action says *review / verify*, not *delete*: the measurement answers one reward channel,
+so the human owns the call. (In the conditional demo, the un-taken `code_specialist` shows as a prune
+candidate — and the caveat is exactly right: it's null on *this* query, essential for code queries.)
+
 ## Replay a real Claude Code session
 
 Already ran a multi-agent Claude Code session? Watch it play back — in 3D, FLOW, and

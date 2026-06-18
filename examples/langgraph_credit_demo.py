@@ -17,6 +17,10 @@ node's true marginal contribution baked in, so you can see the measurement recov
 import random
 
 from agentviz.integrations.langgraph import measure_langgraph_credit, topology_from_compiled
+from agentviz.recommend import recommend, format_recommendations
+
+# Illustrative per-run cost ($) per node — in practice this comes from usage data.
+COST_BY_NODE = {"retriever": 0.030, "reasoner": 0.020, "verifier": 0.010, "stylist": 0.006}
 
 
 def _crn_noise(name: str, state: dict, sd: float = 0.04) -> float:
@@ -94,6 +98,12 @@ def main() -> None:
         ci = f"[{r.ci[0]:+.3f}, {r.ci[1]:+.3f}]"
         print(f"{r.agent_id:<12}{r.credit:>+9.3f}   {ci:<18}{r.credit_state}")
     print("\nMeasured reward deltas — the stylist shows ~0 (tight_null): real, not hidden.")
+
+    # Turn the measurement into a decision — grounded, every rec traces to a measured fact.
+    recs = recommend(results, cost_by_node=COST_BY_NODE, total_reward=0.90,
+                     channel="answer_quality")
+    print("\n── Recommendations ───────────────────────────────────────")
+    print(format_recommendations(recs))
 
 
 if __name__ == "__main__":
