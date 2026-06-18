@@ -10,7 +10,7 @@
 your approval is an unmissable golden ring. Toggle to a clean 2D graph the moment
 you need to actually debug.*
 
-[Quickstart](#quickstart) · [The four views](#the-four-views) · [Credit assignment](#credit-assignment--which-agent-actually-mattered) · [LangGraph](#measure-credit-on-your-langgraph--no-hand-wrapping) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
+[Quickstart](#quickstart) · [The four views](#the-four-views) · [Credit assignment](#credit-assignment--which-agent-actually-mattered) · [LangGraph](#measure-credit-on-your-langgraph--no-hand-wrapping) · [CrewAI](#measure-credit-on-your-crewai-crew) · [Efficiency audit](#efficiency-audit) · [SDK](#sdk) · [How it works](#how-it-works)
 
 </div>
 
@@ -158,11 +158,39 @@ state, so if removing a node deterministically reroutes the graph, that reroute 
 branch is correctly a confident ~0. (When that makes a node look superadditive — A worth 0.8, B worth
 0.3, past a 0.8 total — that's real complementarity, which Shapley/Rung 3 deconflates, not a bug.)
 
-**Honest scope:** DAGs (linear, branching, joins, conditional) — cycles / retry loops are the next
-step. Re-runs re-execute non-ablated node bodies, so route real side effects through
-`tool_call(side_effect="external")` (mocked under the engine's forced dry-run) or measure on a
-side-effect-free pipeline. Measuring causal credit costs real re-runs (and real tokens) — the honest
-price of a measured answer over a guessed one.
+**Cycles & retry loops work too.** A conditional edge that routes *back* to an earlier node
+(`worker → check → (not done → worker, else END)`) makes the graph cyclic; the runner switches to a
+bounded scheduler with a `max_steps` cap, so a re-run **can never hang** — and if removing a node
+makes the loop run longer (or never converge), that's measured as the real consequence, with a capped
+run reporting the genuine current-state reward, never a fabricated one.
+
+**Honest scope:** any DAG *or* bounded-cyclic graph. Re-runs re-execute non-ablated node bodies, so
+route real side effects through `tool_call(side_effect="external")` (mocked under the engine's forced
+dry-run) or measure on a side-effect-free pipeline. Measuring causal credit costs real re-runs (and
+real tokens) — the honest price of a measured answer over a guessed one.
+
+## Measure credit on your CrewAI crew
+
+Same idea, same honesty — for [CrewAI](https://github.com/crewAIInc/crewAI). A sequential crew is an
+ordered list of tasks where each task's output becomes the next's context; AgentViz maps that to the
+graph engine and measures each task's causal credit by re-running with it ablated:
+
+```python
+from agentviz.integrations.crewai import measure_crew_credit
+
+TASKS = [("researcher", research), ("writer", write), ("editor", edit), ("proofreader", proof)]
+#         ^ ordered (name, task_fn) — task_fn(context) -> partial update; for a real crew it wraps the agent call
+
+credit = measure_crew_credit(TASKS, input={...}, reward=lambda ctx: ctx["eval_score"], samples=200)
+# researcher +0.50 · writer +0.30 · editor +0.15 · proofreader ~0.00 (tight_null → prune candidate)
+```
+
+It **delegates to the same verified engine** (no re-implemented credit math), so the credit is the
+same measured-delta-with-CI signal and feeds `recommend()` identically. `crew_topology(crew)`
+duck-types a real `Crew` for the node names + order. Runnable in
+[`examples/crewai_credit_demo.py`](examples/crewai_credit_demo.py). **Scope:** sequential process in
+v1 (hierarchical/manager-delegation is the next step); you supply runnable `task_fn`s — the adapter
+doesn't hook `crew.kickoff` internals (CrewAI exposes no public per-task ablation seam).
 
 ### From measurement to decision
 

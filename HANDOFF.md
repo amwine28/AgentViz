@@ -267,10 +267,36 @@ report.py (2: Recommendation objs + plain dicts, run_id stamped); ui store.test.
 session_start). SDK 69->71, UI 96->97, tsc clean, build clean. PENDING (MCP playwright classifier was
 down): capture a CREDIT-lens-with-recommendations screenshot for the README (docs/assets/) when the
 browser tool is back — feature is verified by tests, only the visual is outstanding.
-- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) a CrewAI
-  adapter (same bridge shape); (3) opt-in route-held content-only estimand for routers; (4)
-  redundancy/merge recs need coalition data (Shapley/Rung 3) — single-LOO can't prove it (honest);
-  (5) capture the recommendations screenshot (see PENDING above).
+SLICES 5+6 (2026-06-18, same session, built via ULTRACODE Workflow wf_3068f808-b8d: 2 sequential
+TDD build agents + 2 parallel adversarial verifiers, both verdict=ship):
+- SLICE 5 CYCLES/retry-loops in langgraph.py: langgraph_workflow/measure_langgraph_credit gain
+  `max_steps: int = 1000`. New _is_acyclic() Kahn pass gates the executor: ACYCLIC keeps the
+  byte-for-byte topo path (8 prior tests unchanged); CYCLIC uses a bounded deterministic FIFO
+  worklist (`while queue and steps < max_steps`, steps++ unconditional → provably bounded, NEVER
+  hangs). Shared _run_node helper. Ablation under cycles = HONEST counterfactual (removing the
+  loop's progress-maker → more iterations / capped-degraded reward, measured; capped run reports
+  REAL current-state reward, never faked). For a self-looping single node, pass entry=[node].
+  +3 tests (retry-converges, ablation-in-loop, termination-cap). Verifier empirically built 5
+  adversarial termination cases — all bounded.
+- SLICE 6 CREWAI adapter (NEW sdk/agentviz/integrations/crewai.py): measure_crew_credit(tasks,*,
+  reward,...), crew_workflow(...), crew_topology(crew). tasks = ordered [(name, task_fn)];
+  task_fn(context)->dict. DELEGATES to langgraph (no executor dup) — sequential crew → linear
+  edge chain. Hermetic (no crewai pkg); crew_topology duck-typed (task.name→agent.role→task_i),
+  unique-name validation. Scope: sequential v1 (hierarchical = next step); user supplies task_fns
+  (no crew.kickoff hooking — no public per-task ablation seam). +5 tests. examples/crewai_credit_
+  demo.py (verified: researcher 0.499/writer 0.299/editor 0.152/proofreader tight_null + prune rec).
+- ORCHESTRATOR fixups after the workflow: fixed 2 stale docstrings in langgraph.py the agents left
+  (per constraints) — module Grounding-boundaries (cycles now supported) AND measure_langgraph_credit
+  (it still claimed "routing-CRN / baseline path replayed" — WRONG, that estimand was ripped out in
+  slice-2; now correctly says honest total-causal-effect). README: cycles paragraph + "## Measure
+  credit on your CrewAI crew" section + nav. SDK suite 69→79 (8 new across the two slices), full
+  suite green, both verifiers ran it.
+- NEXT candidates: (1) hierarchical/manager CrewAI process (richer estimand than sequential);
+  (2) opt-in route-held content-only estimand for routers; (3) redundancy/merge recs need coalition
+  data (Shapley/Rung 3) — single-LOO can't prove it (honest); (4) UI: a cycle/loop indicator + the
+  recommendations screenshot. PENDING screenshot (MCP playwright browser wedged on a stale profile
+  lock — a live chrome pid holds mcp-chrome-ba03d4e; needs the MCP browser to be restarted): capture
+  CREDIT-lens-with-recommendations for docs/assets/ when the tool recovers. Feature is test-verified.
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q

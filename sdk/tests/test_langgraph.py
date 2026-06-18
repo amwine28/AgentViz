@@ -170,6 +170,80 @@ def test_conditional_reroute_under_ablation_is_a_real_consequence():
     assert by["c"].credit_state == "tight_null"   # never on the taken path in baseline
 
 
+@pytest.mark.asyncio
+async def test_retry_loop_converges(unused_tcp_port):
+    # worker -> check -> (router: not done -> worker, else END).
+    # worker adds 0.25 each pass and counts passes; check marks done once score >= 1.0.
+    # This graph is CYCLIC (check routes back to worker) — the topo-only runner raised.
+    def worker(st):
+        return {"score": st.get("score", 0) + 0.25, "passes": st.get("passes", 0) + 1}
+
+    def check(st):
+        return {"done": st.get("score", 0) >= 1.0}
+
+    nodes = {"worker": worker, "check": check}
+    edges = [("worker", "check")]                      # static forward edge
+    cond = [("check", lambda st: "END" if st.get("done") else "worker",
+             {"worker": "worker", "END": "END"})]      # loop back until done
+    wf = langgraph_workflow(nodes, edges, conditional_edges=cond, entry=["worker"],
+                            reward=lambda st: st.get("score", 0.0), channel="q")
+    s = session(name="t", port=unused_tcp_port, autostart_relay=False, dry_run=True)
+    await s.connect(wait_timeout=0)
+    await wf(s)                                         # must terminate, not hang
+    await s.close(flush_timeout=0)
+    # 0.25 * 4 passes == 1.0 ; loop stops the pass that reaches done.
+    assert abs(s.last_outcome["q"]["value"] - 1.0) < 1e-9
+
+
+def test_ablation_in_loop_is_a_real_consequence():
+    # worker advances score; check loops back until score >= 1.0 (capped at max_steps so a
+    # degraded run is still a REAL outcome). Ablating `worker` means the loop never advances
+    # toward done — it spins until the hard cap and the reward stays 0.0. That extra looping
+    # is the HONEST counterfactual: worker is load-bearing, measured, not held fixed. The
+    # measurement must RETURN (the cap guarantees no hang under ablation).
+    def worker(st):
+        return {"score": st.get("score", 0) + 0.25}
+
+    def check(st):
+        return {"done": st.get("score", 0) >= 1.0}
+
+    nodes = {"worker": worker, "check": check}
+    edges = [("worker", "check")]
+    cond = [("check", lambda st: "END" if st.get("done") else "worker",
+             {"worker": "worker", "END": "END"})]
+    res = measure_langgraph_credit(
+        nodes, edges, conditional_edges=cond, entry=["worker"], input={},
+        reward=lambda st: st.get("score", 0.0), channel="q",
+        max_steps=50, samples=10, seed=1, publish=False,
+    )
+    by = {r.agent_id: r for r in res}
+    # Baseline reward is 1.0 (converges); ablating worker drops it to 0.0 (loop never
+    # advances, caps out) — worker's credit is the full, real drop.
+    assert abs(by["worker"].credit - 1.0) < 0.02
+
+
+@pytest.mark.asyncio
+async def test_termination_cap_stops_a_nonconverging_loop(unused_tcp_port):
+    # A router that NEVER says done — without a hard cap this loops forever. The cap must
+    # STOP it at max_steps and still report a reward on the current state (a capped run is
+    # a real, if degraded, outcome — grounded). Assert the call RETURNS (no hang).
+    def worker(st):
+        return {"score": st.get("score", 0) + 0.1, "passes": st.get("passes", 0) + 1}
+
+    nodes = {"worker": worker}
+    edges = []
+    cond = [("worker", lambda st: "worker", {"worker": "worker"})]   # always loop back
+    wf = langgraph_workflow(nodes, edges, conditional_edges=cond, entry=["worker"],
+                            reward=lambda st: st.get("passes", 0), channel="q",
+                            max_steps=20)
+    s = session(name="t", port=unused_tcp_port, autostart_relay=False, dry_run=True)
+    await s.connect(wait_timeout=0)
+    await wf(s)                                         # must return; the cap prevents a hang
+    await s.close(flush_timeout=0)
+    # exactly max_steps node executions, then stop and report on current state.
+    assert s.last_outcome["q"]["value"] == 20
+
+
 def test_topology_from_compiled_duck_typed():
     # A stub mimicking the stable public surface of a LangGraph CompiledStateGraph:
     # .get_graph() -> object with .nodes (dict) and .edges (list of source/target).
