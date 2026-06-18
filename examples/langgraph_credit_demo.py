@@ -14,8 +14,10 @@ This demo uses a stochastic reward (so the confidence intervals have real width)
 node's true marginal contribution baked in, so you can see the measurement recover them:
     retriever ~0.45 · reasoner ~0.30 · verifier ~0.15 · stylist ~0.00 (cosmetic)
 """
+import asyncio
 import random
 
+from agentviz import session
 from agentviz.integrations.langgraph import measure_langgraph_credit, topology_from_compiled
 from agentviz.recommend import recommend, format_recommendations
 
@@ -89,7 +91,7 @@ def main() -> None:
         channel="answer_quality",
         samples=200,
         seed=0,
-        publish=True,            # publishes a credit_report so an open AgentViz UI lights up
+        publish=False,           # we publish credit + recommendations together below
     )
 
     print(f"{'node':<12}{'credit':>9}   {'95% CI':<18}{'state'}")
@@ -104,6 +106,25 @@ def main() -> None:
                      channel="answer_quality")
     print("\n── Recommendations ───────────────────────────────────────")
     print(format_recommendations(recs))
+
+    # Publish credit + recommendations together (one session, so the canvas isn't reset
+    # between them) — an open AgentViz UI lights up the CREDIT lens with both.
+    asyncio.run(_publish(results, recs, channel="answer_quality"))
+
+
+async def _publish(results, recs, channel: str) -> None:
+    s = session(name="langgraph credit demo")
+    try:
+        await s.connect(wait_timeout=1.0)
+        await s.report_credit(method="counterfactual", channel=channel, agents=[{
+            "agent": r.agent_id, "credit": round(r.credit, 4),
+            "ci": [round(r.ci[0], 4), round(r.ci[1], 4)],
+            "credit_state": r.credit_state, "basis": "measured"} for r in results])
+        await s.report_recommendations(recs, channel=channel)
+    except Exception:
+        pass            # best-effort: no relay running is fine (the report is also printed)
+    finally:
+        await s.close(flush_timeout=1.0)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ export type ViewMode = "3d" | "2d" | "flow" | "credit";
 export type EventKind =
   | "session_start" | "agent_spawn" | "agent_status" | "tool_call_pending"
   | "tool_result" | "tool_denied" | "agent_message" | "log" | "agent_complete"
-  | "command_ack" | "usage" | "outcome" | "credit_report";
+  | "command_ack" | "usage" | "outcome" | "credit_report" | "recommendation_report";
 export type CommandKind =
   | "tool_approve" | "tool_deny" | "agent_pause" | "agent_resume"
   | "agent_stop" | "inject_message" | "spawn_agent";
@@ -114,6 +114,20 @@ export interface CreditReportEvent {
   agents: CreditAgentEntry[];
   timestamp: number;
 }
+export interface RecommendationEntry {
+  rule: string;            // prune_candidate | single_point_of_failure | increase_samples | regression
+  severity: string;        // high | medium | info
+  agents: string[];
+  action: string;          // the suggested decision (framed as review/verify)
+  rationale: string;       // the measured fact it traces to
+  savings_usd: number | null;
+}
+export interface RecommendationReportEvent {
+  kind: "recommendation_report";
+  channel: string;
+  recommendations: RecommendationEntry[];
+  timestamp: number;
+}
 export interface AgentCompleteEvent {
   kind: "agent_complete";
   agent_id: string;
@@ -125,7 +139,7 @@ export interface AgentCompleteEvent {
 export type AgentVizEvent = (
   | SessionStartEvent | AgentSpawnEvent | AgentStatusEvent | ToolCallPendingEvent
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
-  | CommandAckEvent | UsageEvent | OutcomeEvent | CreditReportEvent
+  | CommandAckEvent | UsageEvent | OutcomeEvent | CreditReportEvent | RecommendationReportEvent
 ) & { seq?: number; run_id?: string };
 
 // UI state shapes

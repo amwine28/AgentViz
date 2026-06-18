@@ -70,6 +70,29 @@ export function CreditView({ state, onSelectNode }: Props) {
         )}
       </div>
 
+      {state.recommendations.length > 0 && (
+        <div className="credit-table panel recs">
+          <div className="panel-title">
+            <span>▸ Recommendations — grounded, measured{state.recommendationsChannel ? ` · [${state.recommendationsChannel}]` : ""}</span>
+          </div>
+          <div className="scroll-area">
+            {state.recommendations.map((r, i) => (
+              <div className={`rec-row sev-${r.severity}`} key={i}>
+                <div className="rec-head">
+                  <span className={`badge rec-sev sev-${r.severity}`}>{r.severity}</span>
+                  <span className="rec-rule">{r.rule}</span>
+                  <span className="rec-agents">{r.agents.join(", ")}</span>
+                  {r.savings_usd ? <span className="rec-savings">~${r.savings_usd.toFixed(4)}/run</span> : null}
+                </div>
+                <div className="rec-action">{r.action}</div>
+                <div className="rec-why muted">why: {r.rationale}</div>
+              </div>
+            ))}
+          </div>
+          <div className="muted credit-note">every recommendation traces to a measured fact — a healthy node yields none, and each says "review", not "delete"</div>
+        </div>
+      )}
+
       {causalReports.map((rep) => {
         const maxAbs = Math.max(1e-9, ...rep.agents.map((a) => Math.abs(a.credit)));
         return (

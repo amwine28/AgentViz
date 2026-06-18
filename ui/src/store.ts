@@ -1,5 +1,6 @@
 import type {
   AgentVizEvent, AgentNode, MessageEdge, AgentStatus, OutcomeEvent, CreditAgentEntry,
+  RecommendationEntry,
 } from "./types";
 
 // One per credit method (counterfactual/shapley/densified); published by a harness.
@@ -39,6 +40,8 @@ export interface AppState {
   timeline: AgentVizEvent[]; // narrative events in arrival order, for the FLOW view
   outcomes: Record<string, OutcomeChannel>; // key = channel; for credit assignment
   creditReports: Record<string, CreditReportState>; // key = method; causal credit (Rungs 2-4)
+  recommendations: RecommendationEntry[]; // grounded actions derived from measured credit
+  recommendationsChannel: string;         // the reward channel the recommendations are about
   dryRun: boolean; // mock-side-effects re-run mode (from session_start)
 }
 
@@ -56,6 +59,8 @@ export const initialState: AppState = {
   timeline: [],
   outcomes: {},
   creditReports: {},
+  recommendations: [],
+  recommendationsChannel: "",
   dryRun: false,
 };
 
@@ -131,6 +136,10 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       return { ...state, creditReports: { ...state.creditReports, [event.method]: {
         method: event.method, channel: event.channel, agents: event.agents, timestamp: event.timestamp,
       } } };
+    case "recommendation_report":
+      // grounded actions derived from measured credit (last report wins)
+      return { ...state, recommendations: event.recommendations,
+               recommendationsChannel: event.channel };
     case "agent_spawn": {
       const node: AgentNode = {
         id: event.agent_id,

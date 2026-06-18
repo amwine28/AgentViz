@@ -163,6 +163,20 @@ describe("store reducer", () => {
     expect(state.creditReports).toEqual({});
   });
 
+  test("recommendation_report records recommendations and resets on session_start", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "recommendation_report", channel: "quality",
+      recommendations: [{ rule: "prune_candidate", severity: "medium", agents: ["stylist"],
+        action: "Review 'stylist' for removal", rationale: "credit ~0", savings_usd: 0.006 }],
+      timestamp: 1,
+    } });
+    expect(state.recommendations[0].rule).toBe("prune_candidate");
+    expect(state.recommendations[0].agents).toEqual(["stylist"]);
+    expect(state.recommendationsChannel).toBe("quality");
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
+    expect(state.recommendations).toEqual([]);
+  });
+
   test("command_ack records status by cmd_id", () => {
     const state = reducer(initialState, { type: "event", event: { kind: "command_ack", cmd_id: "c-9", status: "applied", timestamp: 1 } });
     expect(state.acks["c-9"]).toBe("applied");

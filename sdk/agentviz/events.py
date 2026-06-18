@@ -6,7 +6,7 @@ import uuid
 EventKind = Literal[
     "session_start", "agent_spawn", "agent_status", "tool_call_pending",
     "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
-    "command_ack", "usage", "outcome", "credit_report"
+    "command_ack", "usage", "outcome", "credit_report", "recommendation_report"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
@@ -138,6 +138,14 @@ class CreditReportEvent:
     channel: str = "reward"
     # each entry: {agent, credit, ci:[lo,hi]|None, credit_state|None, basis}
     agents: list[dict[str, Any]] = field(default_factory=list)
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class RecommendationReportEvent:
+    kind: Literal["recommendation_report"] = field(default="recommendation_report", init=False)
+    channel: str = "reward"
+    # each entry: {rule, severity, agents:[...], action, rationale, savings_usd|None}
+    recommendations: list[dict[str, Any]] = field(default_factory=list)
     timestamp: float = field(default_factory=_now)
 
 @dataclass

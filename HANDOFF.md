@@ -254,10 +254,23 @@ sdk/tests/test_recommend.py (7, TDD). Both langgraph demos now print recommendat
 demo's code_specialist (tight_null on a research query) is a deliberate honesty lesson — flagged a
 prune CANDIDATE w/ the "needed for another objective?" caveat (it's essential for code queries).
 README "### From measurement to decision". SDK 62 -> 69.
-- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) UI surfacing
-  of recommendations (credit_report event could carry them; CreditView renders an action list);
-  (3) a CrewAI adapter (same bridge shape); (4) opt-in route-held content-only estimand for routers;
-  (5) redundancy/merge recs need coalition data (Shapley/Rung 3) — single-LOO can't prove it (honest).
+SLICE 4 (2026-06-18, same session): UI SURFACING of recommendations. New recommendation_report
+event end-to-end: events.py RecommendationReportEvent + EventKind; session.report_recommendations(
+recs, channel) accepts Recommendation dataclasses OR dicts (asdict via is_dataclass); types.ts
+RecommendationEntry + RecommendationReportEvent + union + EventKind; store AppState.recommendations
++ recommendationsChannel (reset on session_start, last report wins); CreditView renders a severity-
+ranked "▸ Recommendations" panel ABOVE the causal-credit table (sev-high/medium/info left-accent,
+$/run savings, action + "why: <rationale>"); styles.css .rec-* block. langgraph_credit_demo publishes
+credit + recs in ONE session (publish=False on measure, then _publish() — separate sessions each emit
+session_start which resets the canvas and would wipe the credit). Tests: sdk test_recommendations_
+report.py (2: Recommendation objs + plain dicts, run_id stamped); ui store.test.ts (+1, resets on
+session_start). SDK 69->71, UI 96->97, tsc clean, build clean. PENDING (MCP playwright classifier was
+down): capture a CREDIT-lens-with-recommendations screenshot for the README (docs/assets/) when the
+browser tool is back — feature is verified by tests, only the visual is outstanding.
+- NEXT candidates: (1) cycles/retry-loop support (bounded fixpoint, not pure topo); (2) a CrewAI
+  adapter (same bridge shape); (3) opt-in route-held content-only estimand for routers; (4)
+  redundancy/merge recs need coalition data (Shapley/Rung 3) — single-LOO can't prove it (honest);
+  (5) capture the recommendations screenshot (see PENDING above).
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q

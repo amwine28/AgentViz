@@ -786,3 +786,32 @@ textarea, input { cursor: text; }
 }
 .empty-state .hint { font-size: 11px; color: var(--ink-faint); letter-spacing: 0.08em; }
 .empty-state code { color: var(--ink-dim); }
+
+/* Recommendations — actionable, grounded decisions in the CREDIT lens */
+.panel.recs .panel-title { color: var(--c-approve); border-color: rgba(255, 209, 102, 0.25); }
+.rec-row {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border-left: 3px solid var(--c-paused);
+  background: rgba(255, 255, 255, 0.025);
+}
+.rec-row.sev-high { border-left-color: var(--c-err); background: rgba(255, 82, 119, 0.06); }
+.rec-row.sev-medium { border-left-color: var(--c-wait); background: rgba(255, 180, 84, 0.05); }
+.rec-row.sev-info { border-left-color: var(--c-paused); }
+.rec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.badge.rec-sev { text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px; }
+.badge.rec-sev.sev-high { color: var(--c-err); border: 1px solid rgba(255, 82, 119, 0.5); }
+.badge.rec-sev.sev-medium { color: var(--c-wait); border: 1px solid rgba(255, 180, 84, 0.5); }
+.badge.rec-sev.sev-info { color: var(--c-paused); border: 1px solid rgba(139, 155, 180, 0.5); }
+.rec-rule {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px; color: var(--ink-dim); letter-spacing: 0.02em;
+}
+.rec-agents { font-weight: 600; color: var(--ink); font-size: 12px; }
+.rec-savings {
+  margin-left: auto; font-family: var(--font-mono, monospace);
+  font-size: 11px; color: var(--c-done); text-shadow: 0 0 6px rgba(110, 247, 160, 0.5);
+}
+.rec-action { font-size: 12px; line-height: 1.45; color: var(--ink); }
+.rec-why { font-size: 10.5px; line-height: 1.4; margin-top: 3px; }

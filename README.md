@@ -191,6 +191,11 @@ And every action says *review / verify*, not *delete*: the measurement answers o
 so the human owns the call. (In the conditional demo, the un-taken `code_specialist` shows as a prune
 candidate — and the caveat is exactly right: it's null on *this* query, essential for code queries.)
 
+These surface **in the UI too**: `session.report_recommendations(recs)` publishes them, and the
+**CREDIT** lens renders them as a severity-ranked action list above the causal-credit table — the
+decision sits next to the measurement that justifies it. The LangGraph demos publish both, so an open
+`/agentviz` window lights up with the credit *and* what to do about it.
+
 ## Replay a real Claude Code session
 
 Already ran a multi-agent Claude Code session? Watch it play back — in 3D, FLOW, and

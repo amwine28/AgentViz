@@ -8,7 +8,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from .relay_client import RelayClient
 from .agent import Agent, _NeutralAgent
-from .events import AgentMessageEvent, SessionStartEvent, OutcomeEvent, CreditReportEvent, serialize
+from dataclasses import asdict, is_dataclass
+from .events import (AgentMessageEvent, SessionStartEvent, OutcomeEvent, CreditReportEvent,
+                     RecommendationReportEvent, serialize)
 from typing import Literal
 
 PORT_FILE = Path.home() / ".agentviz" / "relay.json"
@@ -166,6 +168,20 @@ class Session:
         the credit values must be measured/axiomatic, never an LLM opinion."""
         await self.client.send(serialize(CreditReportEvent(
             method=method, channel=channel, agents=agents,
+        )))
+
+    async def report_recommendations(
+        self,
+        recommendations: list,
+        channel: str = "reward",
+    ) -> None:
+        """Publish grounded recommendations (from recommend.py) so the UI can surface the
+        DECISION — prune / harden / sample more / regression — alongside the credit. Accepts
+        Recommendation dataclasses or plain dicts; the SDK is only transport, the rules are
+        grounded in measured facts upstream."""
+        recs = [asdict(r) if is_dataclass(r) else dict(r) for r in recommendations]
+        await self.client.send(serialize(RecommendationReportEvent(
+            channel=channel, recommendations=recs,
         )))
 
     def _name_to_id(self, name_or_id: str) -> str | None:
