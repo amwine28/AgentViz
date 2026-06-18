@@ -294,9 +294,15 @@ TDD build agents + 2 parallel adversarial verifiers, both verdict=ship):
 - NEXT candidates: (1) hierarchical/manager CrewAI process (richer estimand than sequential);
   (2) opt-in route-held content-only estimand for routers; (3) redundancy/merge recs need coalition
   data (Shapley/Rung 3) — single-LOO can't prove it (honest); (4) UI: a cycle/loop indicator + the
-  recommendations screenshot. PENDING screenshot (MCP playwright browser wedged on a stale profile
-  lock — a live chrome pid holds mcp-chrome-ba03d4e; needs the MCP browser to be restarted): capture
-  CREDIT-lens-with-recommendations for docs/assets/ when the tool recovers. Feature is test-verified.
+  recommendations screenshot. PENDING screenshot: the ".recs" panel was CONFIRMED rendering live on
+  the CREDIT lens (2026-06-18 — loaded /tmp/recs_fixture.py scene into the relay, browser_evaluate
+  found ".recs panel present"), but the MCP playwright browser_take_screenshot reliably times out at
+  the MCP's 5s callTool ceiling on this page (even with animations/.atmosphere disabled) — an env
+  limit, not the feature. To capture docs/assets/agentviz-recommendations.png later: publish a
+  credit+recs scene (see /tmp/recs_fixture.py pattern), open CREDIT lens, screenshot via a tool
+  without the 5s cap (e.g. node/py playwright in a venv, or Chrome headless --screenshot). Feature is
+  test-verified + visually confirmed; README describes it in text. (Lock issue is RESOLVED — browser
+  navigates fine now; do NOT re-clear mcp-chrome locks.)
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q
