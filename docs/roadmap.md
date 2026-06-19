@@ -213,3 +213,32 @@ The free/paid boundary falls along a natural technical line: the local relay ter
 3. **Global Approvals Inbox + fix approval UX** (0.1 + 1.2) — converts the control surface from dangerous-demo to something you'd trust in production.
 
 Save branching replay (2.1) for the fundraising keynote. Build the foundation (#1) that makes it possible first.
+
+---
+
+## Queued (owner-requested)
+
+### Q1. Playback tempo controls — "watch the agents at different speeds"
+*Requested 2026-06-19. When a run/workflow finishes, let the user replay the recorded agent
+world at any speed — hyper-fast, real-time, slow-mo — with play / pause / scrub.*
+
+Builds directly on infra that already exists:
+- Recorded runs are persisted (`relay/src/recorder.ts` tees every event keyed by `run_id`;
+  `relay/src/runs.ts` + `ui/src/components/RunPicker.tsx` browse/replay them).
+- The replay path already honors a rate flag (`relay/src/replay-claude-code.ts --speed=N`).
+
+The new piece is a **client-side playback engine**: a finished run's event log feeds the same
+`store.ts` reducer through a transport-control layer (play/pause, seek to timestamp, speed
+multiplier 0.1x→"hyper"). Because the store is a pure reducer over a timestamped event stream,
+variable-speed playback is a scheduling problem, not a data problem — re-emit events into the
+reducer spaced by `(eventₙ.timestamp − eventₙ₋₁.timestamp) / speed`, clamped, with a "max" mode
+that drops the delay entirely. A scrubber bar + speed dial in `TopBar`; works in every lens
+(3D/2D/FLOW/CREDIT/OPS), so agents/operations visibly animate fast or slow.
+
+Optional extension (confirm with owner): **per-agent speed encoding** — derive each agent's
+real wall-clock pace from its event durations and encode it (animation rate or a speed badge),
+so a slow/bottleneck agent reads as visibly slower even at a fixed global tempo. Grounded in
+measured durations, not inferred.
+
+Sequencing: do AFTER the agentic-operations build (2026-06-19 spec) lands, so playback covers
+operation_start/tick/end too.
