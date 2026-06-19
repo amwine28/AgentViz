@@ -317,3 +317,41 @@ TDD build agents + 2 parallel adversarial verifiers, both verdict=ship):
 - pytest-asyncio provides unused_tcp_port fixture.
 - ramp of approval: tool_call denies on timeout by default now; demos must approve via
   browser or pass on_timeout="approve".
+
+## AGENTIC OPERATIONS (2026-06-19) — first-class loops/goals/schedules/workflows/skills/…
+Owner asked (ultracode) to let users visualize /loop, /goal, and ALL agentic/workflow
+operations + slash commands. Built via an ultracode Workflow (wf_09e59bef-6c5: contract →
+parallel SDK+UI-data tracks → views+glyphs → 3 adversarial verifiers) then a grounded fixup.
+Spec = docs/superpowers/specs/2026-06-19-agentic-operations-design.md (SOURCE OF TRUTH; read
+§4.1 grounding corrections + §8 scope before extending).
+- PRIMITIVE: generic operation_start / operation_tick / operation_end (events.py + types.ts),
+  op-type taxonomy with FAMILY_OF (recurrence/orchestration/command/mode/state). New op_type =
+  enum value + detail shape + one ingestion-registry row; no engine change.
+- SDK: Operation handle (sdk/agentviz/operations.py) + Session.operation()/Agent.operation()
+  async ctx mgrs (auto operation_end, error status on exception, nesting via parent/.child).
+  examples/operations_demo.py exercises every family.
+- INGEST: ui/src/ingest/operations.ts (registry by tool name; parses Workflow meta.phases →
+  child phase ops; collapses recurring fires into ticks), merged additively into claudeCode.ts.
+- UI: store.operations map (+ tick detail merge); ui/src/operations.ts pure layout
+  (buildOpsLayout/opSubtitle/phaseTitles); OPS lens (OpsView.tsx, ViewMode "ops", 5-way V-cycle,
+  TopBar toggle); operation glyphs in Scene3D/Graph + flow.ts cases.
+- GROUNDED-ONLY, audited vs the real 50-transcript corpus (the grounded verifier caught + we
+  fixed): todo accumulates real per-task TaskCreate{subject,description,activeForm}/
+  TaskUpdate{taskId,status} into one per-agent list; CronCreate is {cron,prompt,durable,recurring}
+  (no `name`) keyed by cron+prompt so two daily routines sharing '3 7 * * *' stay distinct;
+  mcp__<server>__<tool> producer; loop-vs-goal by the <<autonomous-loop-dynamic>> sentinel in the
+  PROMPT (delaySeconds is always a number). RECURRENCE IS FIXTURE-VALIDATED ONLY — ScheduleWakeup
+  appears 0× in the corpus; when a real /loop or /goal run is captured, confirm field names +
+  add a corpus fixture. hook/compact: declared op_types, no transcript producer yet (deferred).
+- Tests green: SDK 90, UI 139 (+ tsc + vite build), relay 11 (+ build). Commits 77dd861 (feature,
+  folds in the in-flight UX-makeover edits that shared App/Scene3D/Graph/TopBar/styles) + a00a3f4
+  (roadmap). NOT pushed to origin yet.
+
+## QUEUED (roadmap Q1, owner-requested 2026-06-19): PLAYBACK TEMPO CONTROLS
+"Watch the agents at different speeds (hyper-fast / slow)" when a workflow/run finishes. Build a
+client-side playback engine: re-feed a finished run's timestamped events into the store reducer
+spaced by Δtimestamp/speed (play/pause/scrub + speed dial 0.1x→"hyper"=no delay). Works in every
+lens incl. OPS. Builds on existing recorded-runs infra (relay/src/recorder.ts + runs.ts +
+RunPicker.tsx; replay-claude-code.ts already has --speed). Optional: per-agent speed encoding from
+measured durations. SEQUENCE AFTER operations (so playback covers operation_start/tick/end). Do
+this next.
