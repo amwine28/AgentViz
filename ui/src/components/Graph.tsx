@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import * as d3 from "d3-force";
-import type { AgentNode, MessageEdge } from "../types";
+import type { AgentNode, MessageEdge, OperationState } from "../types";
+import { operationBadge } from "../operations";
 
 interface Props {
   agents: Record<string, AgentNode>;
   messageEdges: Record<string, MessageEdge>;
+  operations: Map<string, OperationState>;
   selectedNodeId: string | null;
   onSelectNode: (id: string) => void;
   onSelectEdge: (key: string) => void;
@@ -13,8 +15,8 @@ interface Props {
 
 const STATUS_COLORS: Record<string, string> = {
   running: "#3fe0ff",
-  waiting: "#ffb454",
-  complete: "#6ef7a0",
+  waiting: "#ff9e3d",
+  complete: "#34d17e",
   error: "#ff5277",
   paused: "#8b9bb4",
 };
@@ -23,7 +25,7 @@ const ROOT_COLOR = "#7daaff";
 interface SimNode extends d3.SimulationNodeDatum { id: string }
 interface SimLink extends d3.SimulationLinkDatum<SimNode> { type: "spawn" | "message"; weight: number }
 
-export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSelectEdge }: Props) {
+export function Graph({ agents, messageEdges, operations, selectedNodeId, onSelectNode, onSelectEdge }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
   // Tracks current node positions so we can seed them on re-render
@@ -152,7 +154,25 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
       label.textContent = agent.name;
       g.appendChild(label);
 
-      return { circle, label, node };
+      // operation badge: a small glyph for a LIVE op this node owns (grounded —
+      // null when the node owns no live operation, so nothing is drawn)
+      const badge = operationBadge(node.id, operations);
+      let badgeEl: SVGTextElement | null = null;
+      if (badge) {
+        badgeEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        badgeEl.setAttribute("text-anchor", "middle");
+        badgeEl.setAttribute("fill", "#b78bff");
+        badgeEl.setAttribute("font-size", "12");
+        badgeEl.setAttribute("font-family", "IBM Plex Mono, monospace");
+        badgeEl.setAttribute("pointer-events", "none");
+        badgeEl.textContent = badge.glyph;
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        t.textContent = `${badge.op_type}: ${badge.label}`;
+        badgeEl.appendChild(t);
+        g.appendChild(badgeEl);
+      }
+
+      return { circle, label, node, badgeEl, badgeR: r };
     });
 
     sim.on("tick", () => {
@@ -164,6 +184,11 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
         nodeEls[i].circle.setAttribute("cy", String(y));
         nodeEls[i].label.setAttribute("x", String(x));
         nodeEls[i].label.setAttribute("y", String(y));
+        const be = nodeEls[i].badgeEl;
+        if (be) {
+          be.setAttribute("x", String(x + nodeEls[i].badgeR + 4));
+          be.setAttribute("y", String(y - nodeEls[i].badgeR));
+        }
       });
       links.forEach((link, i) => {
         const s = link.source as SimNode;
@@ -180,7 +205,7 @@ export function Graph({ agents, messageEdges, selectedNodeId, onSelectNode, onSe
     return () => { sim.stop(); };
   // selectedNodeId intentionally NOT in deps — handled by Effect 2
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, messageEdges, onSelectNode, onSelectEdge]);
+  }, [agents, messageEdges, operations, onSelectNode, onSelectEdge]);
 
   // Effect 2: update stroke-width on selection change WITHOUT restarting simulation
   useEffect(() => {

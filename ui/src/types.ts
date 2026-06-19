@@ -1,12 +1,41 @@
 export type AgentStatus = "running" | "waiting" | "complete" | "error" | "paused";
-export type ViewMode = "3d" | "2d" | "flow" | "credit";
+export type ViewMode = "3d" | "2d" | "flow" | "credit" | "ops";
 export type EventKind =
   | "session_start" | "agent_spawn" | "agent_status" | "tool_call_pending"
   | "tool_result" | "tool_denied" | "agent_message" | "log" | "agent_complete"
-  | "command_ack" | "usage" | "outcome" | "credit_report" | "recommendation_report";
+  | "command_ack" | "usage" | "outcome" | "credit_report" | "recommendation_report"
+  | "operation_start" | "operation_tick" | "operation_end";
 export type CommandKind =
   | "tool_approve" | "tool_deny" | "agent_pause" | "agent_resume"
   | "agent_stop" | "inject_message" | "spawn_agent";
+
+// --- Operation taxonomy (mirrors sdk/agentviz/events.py) ---
+export type OperationKind =
+  | "loop" | "goal" | "schedule" | "workflow" | "phase" | "spawn" | "message"
+  | "skill" | "mcp" | "plan_mode" | "worktree" | "background" | "monitor"
+  | "remote" | "todo" | "compact" | "hook";
+export type OperationFamily = "recurrence" | "orchestration" | "command" | "mode" | "state";
+
+// Single source of truth mapping op_type -> family (mirrors FAMILY_OF in events.py).
+export const FAMILY_OF: Record<OperationKind, OperationFamily> = {
+  loop: "recurrence",
+  goal: "recurrence",
+  schedule: "recurrence",
+  workflow: "orchestration",
+  phase: "orchestration",
+  spawn: "orchestration",
+  message: "orchestration",
+  skill: "command",
+  mcp: "command",
+  plan_mode: "mode",
+  worktree: "mode",
+  background: "mode",
+  monitor: "mode",
+  remote: "mode",
+  todo: "state",
+  compact: "state",
+  hook: "state",
+};
 
 export interface SessionStartEvent {
   kind: "session_start";
@@ -135,11 +164,41 @@ export interface AgentCompleteEvent {
   summary: string;
   timestamp: number;
 }
+export interface OperationStartEvent {
+  kind: "operation_start";
+  op_id: string;
+  op_type: OperationKind;
+  family: OperationFamily;
+  parent_op_id: string | null;
+  agent_id: string | null;          // null => session-level operation
+  label: string;
+  status: "running" | "waiting" | "recurring";
+  detail: Record<string, unknown>;
+  timestamp: number;
+}
+export interface OperationTickEvent {
+  kind: "operation_tick";
+  op_id: string;
+  n: number;                        // iteration / beat index (0-based)
+  label: string;
+  status: "running" | "waiting" | "recurring";
+  detail: Record<string, unknown>;
+  timestamp: number;
+}
+export interface OperationEndEvent {
+  kind: "operation_end";
+  op_id: string;
+  status: "complete" | "error" | "stopped" | "expired";
+  summary: string;
+  detail: Record<string, unknown>;
+  timestamp: number;
+}
 
 export type AgentVizEvent = (
   | SessionStartEvent | AgentSpawnEvent | AgentStatusEvent | ToolCallPendingEvent
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
   | CommandAckEvent | UsageEvent | OutcomeEvent | CreditReportEvent | RecommendationReportEvent
+  | OperationStartEvent | OperationTickEvent | OperationEndEvent
 ) & { seq?: number; run_id?: string };
 
 // UI state shapes
@@ -159,4 +218,28 @@ export interface MessageEdge {
   from_agent_id: string;
   to_agent_id: string;
   messages: Array<{ content: string; timestamp: number; from: string; to: string }>;
+}
+
+export interface OperationTick {
+  n: number;
+  label: string;
+  status: string;
+  detail: Record<string, unknown>;
+  timestamp: number;
+}
+
+export interface OperationState {
+  op_id: string;
+  op_type: string;
+  family: string;
+  parent_op_id: string | null;
+  agent_id: string | null;
+  label: string;
+  status: string;
+  detail: Record<string, unknown>;
+  ticks: OperationTick[];
+  started_at: number;
+  ended_at: number | null;
+  end_status: string | null;
+  children: string[];
 }

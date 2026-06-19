@@ -8,6 +8,7 @@ from .events import (
     ToolCallPendingEvent, ToolResultEvent, ToolDeniedEvent, LogEvent,
     UsageEvent, OutcomeEvent, AgentStatus, serialize, _id
 )
+from .operations import Operation, _OperationContext
 from .exceptions import AgentStopped, ToolCallDenied
 
 if TYPE_CHECKING:
@@ -150,6 +151,28 @@ class Agent:
             stage=stage, source=source, measured=measured,
             value_min=value_min, value_max=value_max, detail=detail or {},
         )))
+
+    def operation(
+        self,
+        op_type: str,
+        *,
+        label: str = "",
+        detail: dict[str, Any] | None = None,
+        parent: "Operation | None" = None,
+    ) -> _OperationContext:
+        """Open an operation scoped to THIS agent (agent_id=self.agent_id). Returns an
+        async context manager: __aenter__ emits operation_start and yields the live
+        Operation handle; __aexit__ emits operation_end (status 'complete', or 'error'
+        with summary=str(exc) if an exception propagates). ``parent`` nests this op
+        under another (sets parent_op_id). Reuses this agent's relay send + seq-stamping."""
+        return _OperationContext(
+            relay=self._relay,
+            op_type=op_type,  # type: ignore[arg-type]
+            agent_id=self.agent_id,
+            parent_op_id=parent.op_id if parent is not None else None,
+            label=label,
+            detail=detail,
+        )
 
     async def _emit_tool_denied(
         self, call_id: str, name: str, reason: Literal["denied", "timeout"]

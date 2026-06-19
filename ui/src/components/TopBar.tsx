@@ -9,6 +9,8 @@ interface Props {
   droppedCount: number;
   view: ViewMode;
   dryRun: boolean;
+  funMode: boolean;
+  onToggleFun: () => void;
   onSetView: (v: ViewMode) => void;
   onOpenRuns: () => void;
   onPauseAll: () => void;
@@ -17,7 +19,7 @@ interface Props {
 
 export function TopBar({
   connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
-  view, dryRun, onSetView, onOpenRuns, onPauseAll, onStopAll,
+  view, dryRun, funMode, onToggleFun, onSetView, onOpenRuns, onPauseAll, onStopAll,
 }: Props) {
   return (
     <div className="topbar">
@@ -41,19 +43,30 @@ export function TopBar({
       <div className="tb-stat"><span className="num">{eventCount.toLocaleString()}</span> events</div>
 
       <button className="hud-btn" onClick={onOpenRuns} title="Browse & replay recorded runs">⟲ Runs</button>
-      <button className="hud-btn" onClick={onPauseAll}>Pause all</button>
-      <button className="hud-btn danger" onClick={onStopAll}>Stop all</button>
+      <button className="hud-btn" onClick={onPauseAll} title="Pause every agent in the swarm">Pause all</button>
+      <button className="hud-btn danger" onClick={onStopAll} title="Stop the entire swarm">Stop all</button>
 
-      <div className="view-toggle">
-        <button className={view === "3d" ? "active" : ""} onClick={() => onSetView("3d")}>3D</button>
+      {view === "3d" && (
+        <button
+          className={`hud-btn fun ${funMode ? "active" : ""}`}
+          onClick={onToggleFun}
+          aria-pressed={funMode}
+          title="HYPERDRIVE — unleash the 3D world (F)"
+        >✦ Hyperdrive</button>
+      )}
+
+      <div className="view-toggle" role="group" aria-label="Visualization view">
+        <button className={view === "3d" ? "active" : ""} aria-pressed={view === "3d"} onClick={() => onSetView("3d")}>3D</button>
         <div className="divider" />
-        <button className={view === "2d" ? "active" : ""} onClick={() => onSetView("2d")}>2D</button>
+        <button className={view === "2d" ? "active" : ""} aria-pressed={view === "2d"} onClick={() => onSetView("2d")}>2D</button>
         <div className="divider" />
-        <button className={view === "flow" ? "active" : ""} onClick={() => onSetView("flow")}>FLOW</button>
+        <button className={view === "flow" ? "active" : ""} aria-pressed={view === "flow"} onClick={() => onSetView("flow")}>FLOW</button>
         <div className="divider" />
-        <button className={view === "credit" ? "active" : ""} onClick={() => onSetView("credit")}>CREDIT</button>
+        <button className={view === "credit" ? "active" : ""} aria-pressed={view === "credit"} onClick={() => onSetView("credit")}>CREDIT</button>
+        <div className="divider" />
+        <button className={view === "ops" ? "active" : ""} aria-pressed={view === "ops"} onClick={() => onSetView("ops")}>OPS</button>
       </div>
-      <span className="hotkey-hint">[V]</span>
+      <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW / CREDIT / OPS">[V]</span>
     </div>
   );
 }

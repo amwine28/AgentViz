@@ -30,6 +30,28 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
+// one glyph per operation kind (mirrors the OPS lens + node badges)
+const OP_GLYPH: Record<string, string> = {
+  loop: "◌", goal: "◎", schedule: "⏱", workflow: "▤", phase: "▸", spawn: "⎇",
+  message: "✉", skill: "/", mcp: "⧉", plan_mode: "✎", worktree: "⌥", background: "▷",
+  monitor: "👁", remote: "☁", todo: "☑", compact: "⊟", hook: "⚓",
+};
+
+// a short, grounded one-liner from a known detail key (honest-unknown: "" if absent)
+function opDetail(e: { op_type?: string; detail?: Record<string, unknown> }): string {
+  const d = e.detail ?? {};
+  const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : null);
+  const n = (k: string) => (typeof d[k] === "number" ? (d[k] as number) : null);
+  switch (e.op_type) {
+    case "loop": return n("interval_s") != null ? `every ${n("interval_s")}s` : "";
+    case "schedule": return s("cron") ?? s("next_fire") ?? "";
+    case "skill": return s("skill") ?? "";
+    case "spawn": return s("agent_type") ?? "";
+    case "workflow": return s("name") ?? "";
+    default: return "";
+  }
+}
+
 export function FlowView({ timeline, agents, onSelectNode }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -193,6 +215,25 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
           const row = d.row;
           const e = row.event;
 
+          // session-level operation (e.g. a /schedule cron): full-width band
+          if ((e.kind === "operation_start" || e.kind === "operation_tick" || e.kind === "operation_end") && row.fullWidth) {
+            const col = "#b78bff";
+            const text = e.kind === "operation_start"
+              ? `${OP_GLYPH[(e as { op_type?: string }).op_type ?? ""] ?? "◆"} ${e.label || (e as { op_type?: string }).op_type} · ${opDetail(e)}`
+              : e.kind === "operation_tick"
+                ? `↻ ${e.label || `beat #${e.n}`}`
+                : `◆ end (${e.status})`;
+            return (
+              <g key={i}>
+                <rect x={GUTTER} y={y - 9} width={Math.max(0, width - GUTTER - 8)} height={18}
+                  fill="rgba(183,139,255,0.06)" stroke={col} strokeOpacity={0.4} strokeWidth={1} rx={2} />
+                <text x={GUTTER + 10} y={y + 3} className="flow-label" fill={col}>
+                  {truncate(text, Math.max(20, Math.floor((width - GUTTER) / 6)))}
+                </text>
+              </g>
+            );
+          }
+
           // run-level terminal outcome: full-width band spanning every lane (the story beat)
           if (e.kind === "outcome" && row.fullWidth) {
             const grounded = e.source !== "llm_judge";
@@ -306,6 +347,41 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
                   </text>
                 </g>
               );
+            case "operation_start": {
+              const col = "#b78bff";
+              const glyph = OP_GLYPH[e.op_type] ?? "◆";
+              return (
+                <g key={i}>{ts}
+                  <circle cx={x} cy={y} r={3.5} fill="none" stroke={col} strokeWidth={1.4} />
+                  <text x={x + 11} y={y + 3} className="flow-label flow-op" fill={col}>
+                    <title>{e.family} · {e.op_type}</title>
+                    {glyph} {truncate(e.label || e.op_type, 22)}{opDetail(e) ? ` · ${opDetail(e)}` : ""}
+                  </text>
+                </g>
+              );
+            }
+            case "operation_tick": {
+              const col = "#8b9bb4";
+              return (
+                <g key={i}>{ts}
+                  <line x1={x - 3} y1={y} x2={x + 3} y2={y} stroke={col} strokeWidth={1.4} />
+                  <text x={x + 11} y={y + 3} className="flow-label" fill={col}>
+                    ↻ {truncate(e.label || `beat #${e.n}`, 22)}
+                  </text>
+                </g>
+              );
+            }
+            case "operation_end": {
+              const col = e.status === "complete" ? "#6ef7a0" : e.status === "error" ? "#ff5277" : "#8b9bb4";
+              return (
+                <g key={i}>{ts}
+                  <circle cx={x} cy={y} r={3.5} fill={col} fillOpacity={0.25} stroke={col} strokeWidth={1.4} />
+                  <text x={x + 11} y={y + 3} className="flow-label" fill={col}>
+                    ◆ {e.status}{e.summary ? ` — ${truncate(e.summary, 18)}` : ""}
+                  </text>
+                </g>
+              );
+            }
             case "agent_complete": {
               const color = e.exit_status === "ok" ? "#6ef7a0" : e.exit_status === "error" ? "#ff5277" : "#8b9bb4";
               return (

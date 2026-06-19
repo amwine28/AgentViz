@@ -11,6 +11,7 @@ import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { GraphStats } from "./components/GraphStats";
 import { CreditView } from "./components/CreditView";
+import { OpsView } from "./components/OpsView";
 import { RunPicker } from "./components/RunPicker";
 import type { ViewMode, AgentVizEvent } from "./types";
 
@@ -19,17 +20,20 @@ import type { ViewMode, AgentVizEvent } from "./types";
 const RELAY_PORT = import.meta.env.DEV ? 3333 : Number(window.location.port) || 3333;
 
 const LEGEND = [
-  { color: "#3fe0ff", label: "running" },
-  { color: "#ffb454", label: "waiting" },
-  { color: "#6ef7a0", label: "complete" },
-  { color: "#ff5277", label: "error" },
-  { color: "#ffd166", label: "needs approval" },
+  { color: "#3fe0ff", label: "running", ring: false },
+  { color: "#ff9e3d", label: "waiting", ring: false },
+  { color: "#34d17e", label: "complete", ring: false },
+  { color: "#ff5277", label: "error", ring: false },
+  { color: "#8b9bb4", label: "paused", ring: false },
+  // approval is drawn as a pulsing torus ring in 3D, not a filled dot
+  { color: "#ffd166", label: "needs approval", ring: true },
 ] as const;
 
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [view, setView] = useState<ViewMode>("3d");
   const [showRuns, setShowRuns] = useState(false);
+  const [funMode, setFunMode] = useState(false);
   const sendRef = useRef<((cmd: object) => string) | null>(null);
 
   const loadRun = useCallback((events: object[]) =>
@@ -43,8 +47,12 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "v" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLInputElement)) {
-        setView((v) => (v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "credit" : "3d"));
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      const k = e.key.toLowerCase();
+      if (k === "v") {
+        setView((v) => (v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "credit" : v === "credit" ? "ops" : "3d"));
+      } else if (k === "f") {
+        setFunMode((f) => !f);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -57,6 +65,18 @@ export function App() {
 
   const selectNode = useCallback((id: string | null) => dispatch({ type: "select_node", agent_id: id }), []);
   const selectEdge = useCallback((key: string | null) => dispatch({ type: "select_edge", edge_key: key }), []);
+
+  // Escape dismisses the topmost transient surface (run picker → node → edge).
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showRuns) setShowRuns(false);
+      else if (state.selectedNodeId) selectNode(null);
+      else if (state.selectedEdgeKey) selectEdge(null);
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [showRuns, state.selectedNodeId, state.selectedEdgeKey, selectNode, selectEdge]);
 
   const agentList = Object.values(state.agents);
   const runningCount = agentList.filter((a) => a.status === "running").length;
@@ -74,6 +94,8 @@ export function App() {
         droppedCount={state.droppedCount}
         view={view}
         dryRun={state.dryRun}
+        funMode={funMode}
+        onToggleFun={() => setFunMode((f) => !f)}
         onSetView={setView}
         onOpenRuns={() => setShowRuns(true)}
         onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
@@ -85,7 +107,9 @@ export function App() {
           <Scene3D
             agents={state.agents}
             messageEdges={state.messageEdges}
+            operations={state.operations}
             selectedNodeId={state.selectedNodeId}
+            funMode={funMode}
             onSelectNode={selectNode}
           />
         ) : view === "flow" ? (
@@ -96,11 +120,14 @@ export function App() {
           />
         ) : view === "credit" ? (
           <CreditView state={state} onSelectNode={selectNode} />
+        ) : view === "ops" ? (
+          <OpsView operations={state.operations} onSelectNode={selectNode} />
         ) : (
           <div className="stage-2d">
             <Graph
               agents={state.agents}
               messageEdges={state.messageEdges}
+              operations={state.operations}
               selectedNodeId={state.selectedNodeId}
               onSelectNode={selectNode}
               onSelectEdge={selectEdge}
@@ -109,10 +136,14 @@ export function App() {
           </div>
         )}
 
-        {agentList.length === 0 && (
+        {agentList.length === 0 && !(view === "ops" && state.operations.size > 0) && (
           <div className="empty-state">
-            <div className="big">AWAITING SIGNAL</div>
-            <div className="hint">run <code>python3 examples/demo_swarm.py</code> — or wrap your agents with the SDK</div>
+            <div className="big">{state.connected ? "AWAITING SIGNAL" : "RELAY OFFLINE"}</div>
+            <div className="hint">
+              {state.connected
+                ? <>run <code>python3 examples/demo_swarm.py</code> — or wrap your agents with the SDK</>
+                : <>can't reach the relay on port {RELAY_PORT} — start it, then this reconnects automatically</>}
+            </div>
           </div>
         )}
 
@@ -139,22 +170,35 @@ export function App() {
           <RunPicker port={RELAY_PORT} onLoad={loadRun} onClose={() => setShowRuns(false)} />
         )}
 
-        <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>
-          {LEGEND.map((l) => (
-            <div key={l.label} className="legend-row">
-              <span className="legend-dot" style={{ background: l.color, boxShadow: `0 0 6px ${l.color}` }} />
-              {l.label}
+        {(view === "3d" || view === "2d") && (
+          <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>
+            {LEGEND.map((l) => (
+              <div key={l.label} className="legend-row">
+                <span
+                  className="legend-dot"
+                  style={l.ring
+                    ? { border: `1.5px solid ${l.color}`, boxShadow: `0 0 6px ${l.color}` }
+                    : { background: l.color, boxShadow: `0 0 6px ${l.color}` }}
+                />
+                {l.label}
+              </div>
+            ))}
+            <div className="legend-row">
+              <span className="legend-line" style={{ background: "#8294b4" }} />
+              spawn
             </div>
-          ))}
-          <div className="legend-row">
-            <span className="legend-line" style={{ background: "#5d6f8d" }} />
-            spawn
+            <div className="legend-row">
+              <span className="legend-line" style={{ background: "#7df3ff", boxShadow: "0 0 6px #7df3ff" }} />
+              message
+            </div>
+            {view === "2d" && (
+              <div className="legend-row" style={{ color: "var(--ink-faint)" }}>
+                <span className="legend-dot" style={{ background: "var(--ink-faint)", width: 5, height: 5 }} />
+                size = activity
+              </div>
+            )}
           </div>
-          <div className="legend-row">
-            <span className="legend-line" style={{ background: "#3fe0ff", boxShadow: "0 0 6px #3fe0ff" }} />
-            message
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="atmosphere" />

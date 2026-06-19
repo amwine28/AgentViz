@@ -6,13 +6,43 @@ import uuid
 EventKind = Literal[
     "session_start", "agent_spawn", "agent_status", "tool_call_pending",
     "tool_result", "tool_denied", "agent_message", "log", "agent_complete",
-    "command_ack", "usage", "outcome", "credit_report", "recommendation_report"
+    "command_ack", "usage", "outcome", "credit_report", "recommendation_report",
+    "operation_start", "operation_tick", "operation_end"
 ]
 CommandKind = Literal[
     "tool_approve", "tool_deny", "agent_pause", "agent_resume",
     "agent_stop", "inject_message", "spawn_agent"
 ]
 AgentStatus = Literal["running", "waiting", "complete", "error", "paused"]
+
+# --- Operation taxonomy (agentic/workflow operations as first-class events) ---
+OperationKind = Literal[
+    "loop", "goal", "schedule", "workflow", "phase", "spawn", "message",
+    "skill", "mcp", "plan_mode", "worktree", "background", "monitor", "remote",
+    "todo", "compact", "hook"
+]
+OperationFamily = Literal["recurrence", "orchestration", "command", "mode", "state"]
+
+# Single source of truth mapping op_type -> family (mirrored in ui/src/types.ts).
+FAMILY_OF: dict[str, str] = {
+    "loop": "recurrence",
+    "goal": "recurrence",
+    "schedule": "recurrence",
+    "workflow": "orchestration",
+    "phase": "orchestration",
+    "spawn": "orchestration",
+    "message": "orchestration",
+    "skill": "command",
+    "mcp": "command",
+    "plan_mode": "mode",
+    "worktree": "mode",
+    "background": "mode",
+    "monitor": "mode",
+    "remote": "mode",
+    "todo": "state",
+    "compact": "state",
+    "hook": "state",
+}
 
 
 def _now() -> float:
@@ -154,6 +184,38 @@ class AgentCompleteEvent:
     agent_id: str = ""
     exit_status: Literal["ok", "error", "stopped"] = "ok"
     summary: str = ""
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class OperationStartEvent:
+    kind: Literal["operation_start"] = field(default="operation_start", init=False)
+    op_id: str = field(default_factory=_id)
+    op_type: OperationKind = "loop"
+    family: OperationFamily = "recurrence"
+    parent_op_id: str | None = None
+    agent_id: str | None = None       # null => session-level operation
+    label: str = ""
+    status: Literal["running", "waiting", "recurring"] = "running"
+    detail: dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class OperationTickEvent:
+    kind: Literal["operation_tick"] = field(default="operation_tick", init=False)
+    op_id: str = ""
+    n: int = 0                        # iteration / beat index (0-based)
+    label: str = ""
+    status: Literal["running", "waiting", "recurring"] = "running"
+    detail: dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=_now)
+
+@dataclass
+class OperationEndEvent:
+    kind: Literal["operation_end"] = field(default="operation_end", init=False)
+    op_id: str = ""
+    status: Literal["complete", "error", "stopped", "expired"] = "complete"
+    summary: str = ""
+    detail: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=_now)
 
 

@@ -11,7 +11,8 @@ from .agent import Agent, _NeutralAgent
 from dataclasses import asdict, is_dataclass
 from .events import (AgentMessageEvent, SessionStartEvent, OutcomeEvent, CreditReportEvent,
                      RecommendationReportEvent, serialize)
-from typing import Literal
+from .operations import Operation, _OperationContext
+from typing import Any, Literal
 
 PORT_FILE = Path.home() / ".agentviz" / "relay.json"
 DEFAULT_PORT = 3333
@@ -125,6 +126,28 @@ class Session:
             raise
         finally:
             self._agents.pop(a.agent_id, None)
+
+    def operation(
+        self,
+        op_type: str,
+        *,
+        label: str = "",
+        detail: dict[str, Any] | None = None,
+        parent: "Operation | None" = None,
+    ) -> _OperationContext:
+        """Open a SESSION-LEVEL operation (agent_id=None). Returns an async context
+        manager: __aenter__ emits operation_start and yields the live Operation
+        handle; __aexit__ emits operation_end (status 'complete', or 'error' with
+        summary=str(exc) if an exception propagates). ``parent`` nests this op under
+        another (sets parent_op_id). Reuses the existing relay send + seq-stamping path."""
+        return _OperationContext(
+            relay=self.client,
+            op_type=op_type,  # type: ignore[arg-type]
+            agent_id=None,
+            parent_op_id=parent.op_id if parent is not None else None,
+            label=label,
+            detail=detail,
+        )
 
     async def send_message(self, from_agent: str, to_agent: str, content: str) -> None:
         from_id = self._name_to_id(from_agent) or from_agent

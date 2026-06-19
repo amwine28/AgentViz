@@ -2,22 +2,28 @@ import { useEffect, useRef } from "react";
 import ForceGraph3D, { ForceGraph3DInstance } from "3d-force-graph";
 import * as THREE from "three";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import type { AgentNode, MessageEdge } from "../types";
+import type { AgentNode, MessageEdge, OperationState } from "../types";
+import { operationBadge } from "../operations";
 
 interface Props {
   agents: Record<string, AgentNode>;
   messageEdges: Record<string, MessageEdge>;
+  operations: Map<string, OperationState>;
   selectedNodeId: string | null;
+  funMode: boolean;
   onSelectNode: (id: string | null) => void;
 }
 
 const STATUS_COLOR: Record<string, string> = {
   running: "#3fe0ff",
-  waiting: "#ffb454",
-  complete: "#6ef7a0",
+  waiting: "#ff9e3d",
+  complete: "#34d17e",
   error: "#ff5277",
   paused: "#8b9bb4",
 };
+
+// HYPERDRIVE palette — saturated neon for the fun-mode particle storm
+const NEON = ["#ff2d95", "#3fe0ff", "#ffe14d", "#8a5cff", "#34ff9e", "#ff7a3d"];
 
 interface VizNode {
   id: string;
@@ -38,47 +44,101 @@ interface NodeVisual {
   core: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   halo: THREE.Sprite;
   ring: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+  label: THREE.Sprite;
+  badge: THREE.Sprite | null; // live-operation glyph; null = node owns no live op
+  badgeType: string | null;   // op_type currently shown (so we know when to rebuild)
   status: string;
+  hue: number; // stable per-node hue offset for fun mode
 }
 
-/* radial-gradient halo texture, tinted per node via material color */
+/* radial-gradient halo — inner stop pulled off pure-white so the status hue
+   survives the bloom pass instead of washing toward white */
 function makeHaloTexture(): THREE.Texture {
   const c = document.createElement("canvas");
   c.width = c.height = 128;
   const ctx = c.getContext("2d")!;
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, "rgba(255,255,255,0.9)");
-  g.addColorStop(0.25, "rgba(255,255,255,0.32)");
+  g.addColorStop(0, "rgba(255,255,255,0.72)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.30)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
 
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* label on a dark glass plate so a name is legible even over a bright glow */
 function makeLabelSprite(text: string): THREE.Sprite {
-  const pad = 8;
+  const pad = 11;
   const fontPx = 26;
+  const font = `600 ${fontPx}px "IBM Plex Mono", monospace`;
+  const measure = document.createElement("canvas").getContext("2d")!;
+  measure.font = font;
+  const tw = Math.ceil(measure.measureText(text).width);
+  const w = tw + pad * 2;
+  const h = Math.round(fontPx + pad * 1.3);
   const c = document.createElement("canvas");
-  const ctx = c.getContext("2d")!;
-  ctx.font = `600 ${fontPx}px "IBM Plex Mono", monospace`;
-  const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
-  const h = fontPx + pad * 2;
   c.width = w; c.height = h;
-  const ctx2 = c.getContext("2d")!;
-  ctx2.font = `600 ${fontPx}px "IBM Plex Mono", monospace`;
-  ctx2.fillStyle = "rgba(201,215,238,0.92)";
-  ctx2.textBaseline = "middle";
-  ctx2.fillText(text, pad, h / 2);
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "rgba(6,11,22,0.74)";
+  roundRectPath(ctx, 0.5, 0.5, w - 1, h - 1, 7);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(125,170,255,0.22)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.font = font;
+  ctx.fillStyle = "rgba(216,226,244,0.97)";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, pad, h / 2 + 1);
   const tex = new THREE.CanvasTexture(c);
   tex.minFilter = THREE.LinearFilter;
-  // depthTest off + high renderOrder: the name must never be swallowed by glow
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex, transparent: true, depthWrite: false, depthTest: false,
   }));
   sprite.renderOrder = 999;
-  const scale = 0.22;
+  const scale = 0.2;
   sprite.scale.set(w * scale, h * scale, 1);
-  sprite.position.set(0, 11.5, 0);
+  sprite.position.set(0, 9.5, 0);
+  return sprite;
+}
+
+/* operation badge: a small glyph on a dark plate, mirroring the label sprite
+   pattern. Placed to the upper-right of the node. Violet so it reads distinct
+   from the cyan/gold status taxonomy. */
+function makeBadgeSprite(glyph: string): THREE.Sprite {
+  const size = 64;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "rgba(6,11,22,0.82)";
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(183,139,255,0.7)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = `600 34px "IBM Plex Mono", monospace`;
+  ctx.fillStyle = "rgba(199,170,255,0.98)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(glyph, size / 2, size / 2 + 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, depthTest: false,
+  }));
+  sprite.renderOrder = 1000;
+  sprite.scale.set(4.4, 4.4, 1);
+  sprite.position.set(5.5, 5.5, 0);
   return sprite;
 }
 
@@ -86,7 +146,6 @@ function makeStarfield(): THREE.Points {
   const COUNT = 2200;
   const positions = new Float32Array(COUNT * 3);
   for (let i = 0; i < COUNT; i++) {
-    // shell distribution so stars stay behind the graph
     const r = 1400 + Math.random() * 2600;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
@@ -102,16 +161,24 @@ function makeStarfield(): THREE.Points {
   return new THREE.Points(geo, mat);
 }
 
-export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: Props) {
+export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funMode, onSelectNode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<VizNode, VizLink> | null>(null);
   const dataRef = useRef<{ nodes: VizNode[]; links: VizLink[] }>({ nodes: [], links: [] });
   const visualsRef = useRef<Map<string, NodeVisual>>(new Map());
   const msgCountsRef = useRef<Map<string, number>>(new Map());
   const haloTexRef = useRef<THREE.Texture | null>(null);
+  const bloomRef = useRef<UnrealBloomPass | null>(null);
+  const controlsRef = useRef<{ autoRotate?: boolean; autoRotateSpeed?: number } | null>(null);
+  const starfieldRef = useRef<THREE.Points | null>(null);
   const rafRef = useRef<number>(0);
   const onSelectRef = useRef(onSelectNode);
   onSelectRef.current = onSelectNode;
+  const selectedRef = useRef<string | null>(selectedNodeId);
+  selectedRef.current = selectedNodeId;
+  const operationsRef = useRef(operations);
+  operationsRef.current = operations;
+  const funRef = useRef(funMode);
 
   /* ---- one-time scene construction ---- */
   useEffect(() => {
@@ -148,12 +215,24 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
         ring.visible = n.pending > 0;
         group.add(ring);
 
-        group.add(makeLabelSprite(n.name || n.id.slice(0, 6)));
+        const label = makeLabelSprite(n.name || n.id.slice(0, 6));
+        group.add(label);
 
-        visuals.set(n.id, { group, core, halo, ring, status: n.status });
+        // operation badge: a live-op glyph (grounded — null when no live op)
+        const b = operationBadge(n.id, operationsRef.current);
+        let badge: THREE.Sprite | null = null;
+        if (b) {
+          badge = makeBadgeSprite(b.glyph);
+          group.add(badge);
+        }
+
+        visuals.set(n.id, {
+          group, core, halo, ring, label, badge, badgeType: b?.op_type ?? null,
+          status: n.status, hue: Math.random(),
+        });
         return group;
       })
-      .linkColor((l: VizLink) => (l.type === "msg" ? "#3fe0ff" : "#5d6f8d"))
+      .linkColor((l: VizLink) => (l.type === "msg" ? "#7df3ff" : "#8294b4"))
       .linkOpacity(0.35)
       .linkWidth((l: VizLink) => (l.type === "msg" ? 0.7 : 0.25))
       .linkDirectionalParticleWidth(2.4)
@@ -161,7 +240,6 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
       .linkDirectionalParticleColor(() => "#7df3ff")
       .onNodeClick((n: VizNode) => {
         onSelectRef.current(n.id);
-        // cinematic fly-to: park the camera at a respectful distance
         const dist = 110;
         const len = Math.hypot(n.x ?? 1, n.y ?? 1, n.z ?? 1) || 1;
         const ratio = 1 + dist / len;
@@ -176,38 +254,96 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
     graphRef.current = graph;
     graph.cameraPosition({ x: 0, y: 60, z: 340 });
 
-    /* bloom — the glow that makes it cinematic */
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(el.clientWidth, el.clientHeight), 0.3, 0.25, 0.35
     );
+    bloomRef.current = bloom;
     graph.postProcessingComposer().addPass(bloom);
 
-    graph.scene().add(makeStarfield());
+    const starfield = makeStarfield();
+    starfieldRef.current = starfield;
+    graph.scene().add(starfield);
 
-    /* slow auto-orbit until the pilot takes the stick */
     const controls = graph.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (e: string, f: () => void) => void };
+    controlsRef.current = controls;
     if (controls) {
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.45;
-      controls.addEventListener?.("start", () => { controls.autoRotate = false; });
+      controls.addEventListener?.("start", () => { if (!funRef.current) controls.autoRotate = false; });
     }
 
-    /* pulse loop: approval rings breathe + billboard, running halos shimmer */
+    const proj = new THREE.Vector3();
+
     const animate = () => {
       const t = performance.now() / 1000;
       const cam = graph.camera();
-      for (const v of visuals.values()) {
-        if (v.ring.visible) {
-          const s = 1 + 0.18 * Math.sin(t * 4.2);
-          v.ring.scale.set(s, s, s);
-          v.ring.material.opacity = 0.65 + 0.35 * Math.sin(t * 4.2);
-          v.ring.lookAt(cam.position);
-        }
-        if (v.status === "running") {
-          const hs = 9 + 1.1 * Math.sin(t * 2.1);
-          v.halo.scale.set(hs, hs, 1);
+      const fun = funRef.current;
+      const W = el.clientWidth, H = el.clientHeight;
+
+      // ---- HYPERDRIVE: rainbow throb, supernova bloom, spinning sky ----
+      if (fun) {
+        if (bloomRef.current) bloomRef.current.strength = 2.0 + 0.7 * Math.sin(t * 3);
+        if (starfieldRef.current) {
+          starfieldRef.current.rotation.y += 0.004;
+          starfieldRef.current.rotation.x += 0.0015;
         }
       }
+
+      // ---- label declutter: project to screen, greedily hide overlaps ----
+      const items: { v: NodeVisual; id: string; sx: number; sy: number; dist: number; infront: boolean; pri: number }[] = [];
+      for (const [id, v] of visuals) {
+        // fun-mode node theatrics
+        if (fun) {
+          const hue = (t * 0.12 + v.hue) % 1;
+          const col = new THREE.Color().setHSL(hue, 1, 0.6);
+          v.core.material.color = col;
+          v.halo.material.color = col;
+          const hs = 16 + 5 * Math.sin(t * 4 + v.hue * 7);
+          v.halo.scale.set(hs, hs, 1);
+          v.core.scale.setScalar(1.2 + 0.35 * Math.sin(t * 6 + v.hue * 9));
+        } else {
+          if (v.ring.visible) {
+            const s = 1 + 0.18 * Math.sin(t * 4.2);
+            v.ring.scale.set(s, s, s);
+            v.ring.material.opacity = 0.65 + 0.35 * Math.sin(t * 4.2);
+            v.ring.lookAt(cam.position);
+          }
+          if (v.status === "running") {
+            const hs = 9 + 1.1 * Math.sin(t * 2.1);
+            v.halo.scale.set(hs, hs, 1);
+          }
+        }
+
+        v.group.getWorldPosition(proj);
+        const dist = cam.position.distanceTo(proj);
+        proj.project(cam);
+        const infront = proj.z < 1;
+        const sx = (proj.x * 0.5 + 0.5) * W;
+        const sy = (-proj.y * 0.5 + 0.5) * H;
+        let pri = 1;
+        if (id === selectedRef.current) pri = 4;
+        else if (v.ring.visible) pri = 3;
+        else if (v.status === "running") pri = 2;
+        items.push({ v, id, sx, sy, dist, infront, pri });
+      }
+
+      // highest priority + nearest first; everyone else yields the space
+      items.sort((a, b) => b.pri - a.pri || a.dist - b.dist);
+      const placed: { x: number; y: number }[] = [];
+      const MINX = 96, MINY = 16;
+      for (const it of items) {
+        if (fun || !it.infront) { it.v.label.visible = false; continue; }
+        let ok = it.id === selectedRef.current;
+        if (!ok) {
+          ok = true;
+          for (const p of placed) {
+            if (Math.abs(p.x - it.sx) < MINX && Math.abs(p.y - it.sy) < MINY) { ok = false; break; }
+          }
+        }
+        it.v.label.visible = ok;
+        if (ok) placed.push({ x: it.sx, y: it.sy });
+      }
+
       rafRef.current = requestAnimationFrame(animate);
     };
     rafRef.current = requestAnimationFrame(animate);
@@ -228,6 +364,41 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
       dataRef.current = { nodes: [], links: [] };
     };
   }, []);
+
+  /* ---- HYPERDRIVE toggle: flip the scene-wide knobs, restore on exit ---- */
+  useEffect(() => {
+    funRef.current = funMode;
+    const graph = graphRef.current;
+    const bloom = bloomRef.current;
+    const controls = controlsRef.current;
+    if (!graph) return;
+
+    if (funMode) {
+      if (bloom) { bloom.radius = 0.9; bloom.strength = 2.0; }
+      if (controls) { controls.autoRotate = true; controls.autoRotateSpeed = 6.5; }
+      graph.linkOpacity(0.85)
+        .linkDirectionalParticles(5)
+        .linkDirectionalParticleSpeed(0.05)
+        .linkDirectionalParticleWidth(3.4)
+        .linkDirectionalParticleColor(() => NEON[Math.floor(Math.random() * NEON.length)]);
+    } else {
+      if (bloom) { bloom.radius = 0.25; bloom.strength = 0.3; }
+      if (controls) { controls.autoRotateSpeed = 0.45; }
+      graph.linkOpacity(0.35)
+        .linkDirectionalParticles(0)
+        .linkDirectionalParticleSpeed(0.012)
+        .linkDirectionalParticleWidth(2.4)
+        .linkDirectionalParticleColor(() => "#7df3ff");
+      // restore status colors + resting scales the fun loop overrode
+      for (const v of visualsRef.current.values()) {
+        const color = new THREE.Color(STATUS_COLOR[v.status] ?? "#8b9bb4");
+        v.core.material.color = color;
+        v.halo.material.color = color;
+        v.core.scale.setScalar(1);
+        v.halo.scale.set(9, 9, 1);
+      }
+    }
+  }, [funMode]);
 
   /* ---- data sync: preserve node identity so layout stays stable ---- */
   useEffect(() => {
@@ -273,7 +444,6 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
       graph.graphData(dataRef.current);
     }
 
-    /* live visual updates without rebuilding objects */
     for (const a of Object.values(agents)) {
       const v = visualsRef.current.get(a.id);
       if (!v) continue;
@@ -281,14 +451,15 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
       v.ring.visible = pending;
       if (v.status !== a.status) {
         v.status = a.status;
-        const color = new THREE.Color(STATUS_COLOR[a.status] ?? "#8b9bb4");
-        v.core.material.color = color;
-        v.halo.material.color = color;
-        if (a.status !== "running") v.halo.scale.set(9, 9, 1);
+        if (!funRef.current) {
+          const color = new THREE.Color(STATUS_COLOR[a.status] ?? "#8b9bb4");
+          v.core.material.color = color;
+          v.halo.material.color = color;
+          if (a.status !== "running") v.halo.scale.set(9, 9, 1);
+        }
       }
     }
 
-    /* pulse a particle down the edge for each new message */
     for (const [key, e] of Object.entries(messageEdges)) {
       const prev = msgCountsRef.current.get(key) ?? 0;
       if (e.messages.length > prev) {
@@ -303,11 +474,31 @@ export function Scene3D({ agents, messageEdges, selectedNodeId, onSelectNode }: 
     }
   }, [agents, messageEdges]);
 
+  /* ---- operation badges: add/swap/remove the live-op glyph per node ---- */
+  useEffect(() => {
+    for (const [id, v] of visualsRef.current) {
+      const b = operationBadge(id, operations);
+      const wantType = b?.op_type ?? null;
+      if (wantType === v.badgeType) continue;  // unchanged — no churn
+      if (v.badge) {
+        v.group.remove(v.badge);
+        v.badge.material.map?.dispose();
+        v.badge.material.dispose();
+        v.badge = null;
+      }
+      if (b) {
+        v.badge = makeBadgeSprite(b.glyph);
+        v.group.add(v.badge);
+      }
+      v.badgeType = wantType;
+    }
+  }, [operations]);
+
   /* ---- selection highlight: brighten the chosen one ---- */
   useEffect(() => {
     for (const [id, v] of visualsRef.current) {
       const selected = id === selectedNodeId;
-      v.core.scale.setScalar(selected ? 1.45 : 1);
+      if (!funRef.current) v.core.scale.setScalar(selected ? 1.45 : 1);
       v.halo.material.opacity = selected ? 1 : 0.85;
     }
   }, [selectedNodeId, agents]);

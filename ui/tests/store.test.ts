@@ -253,4 +253,96 @@ describe("store reducer", () => {
     state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
     expect(state.timeline).toHaveLength(0);
   });
+
+  // ---- operations aggregation ----
+
+  test("operation_start creates an OperationState in the operations map", () => {
+    const state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "op1", op_type: "loop", family: "recurrence",
+      parent_op_id: null, agent_id: null, label: "poll deploy", status: "recurring",
+      detail: { interval_s: 300 }, timestamp: 1,
+    } });
+    const op = state.operations.get("op1")!;
+    expect(op).toBeDefined();
+    expect(op.op_type).toBe("loop");
+    expect(op.family).toBe("recurrence");
+    expect(op.status).toBe("recurring");
+    expect(op.detail.interval_s).toBe(300);
+    expect(op.ended_at).toBeNull();
+    expect(op.ticks).toEqual([]);
+    expect(op.children).toEqual([]);
+  });
+
+  test("operation_start with a parent_op_id pushes the child into the parent's children", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "wf", op_type: "workflow", family: "orchestration",
+      parent_op_id: null, agent_id: null, label: "wf", status: "running", detail: {}, timestamp: 1,
+    } });
+    state = reducer(state, { type: "event", event: {
+      kind: "operation_start", op_id: "ph0", op_type: "phase", family: "orchestration",
+      parent_op_id: "wf", agent_id: null, label: "Audit", status: "running", detail: {}, timestamp: 2,
+    } });
+    expect(state.operations.get("wf")!.children).toEqual(["ph0"]);
+    expect(state.operations.get("ph0")!.parent_op_id).toBe("wf");
+  });
+
+  test("operation_tick appends to the op's ticks", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "op1", op_type: "loop", family: "recurrence",
+      parent_op_id: null, agent_id: null, label: "l", status: "recurring", detail: {}, timestamp: 1,
+    } });
+    state = reducer(state, { type: "event", event: {
+      kind: "operation_tick", op_id: "op1", n: 1, label: "fire", status: "recurring", detail: { ok: true }, timestamp: 2,
+    } });
+    state = reducer(state, { type: "event", event: {
+      kind: "operation_tick", op_id: "op1", n: 2, label: "fire", status: "recurring", detail: {}, timestamp: 3,
+    } });
+    const op = state.operations.get("op1")!;
+    expect(op.ticks.map((t) => t.n)).toEqual([1, 2]);
+    expect(op.ticks[0].detail.ok).toBe(true);
+  });
+
+  test("operation_end sets status, ended_at, end_status and summary", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "op1", op_type: "workflow", family: "orchestration",
+      parent_op_id: null, agent_id: null, label: "w", status: "running", detail: {}, timestamp: 1,
+    } });
+    state = reducer(state, { type: "event", event: {
+      kind: "operation_end", op_id: "op1", status: "complete", summary: "all phases done",
+      detail: { duration_ms: 5000 }, timestamp: 9,
+    } });
+    const op = state.operations.get("op1")!;
+    expect(op.ended_at).toBe(9);
+    expect(op.end_status).toBe("complete");
+    expect(op.status).toBe("complete");
+    expect(op.detail.duration_ms).toBe(5000);
+  });
+
+  test("operation_tick / operation_end for an unknown op_id are ignored (no crash)", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "operation_tick", op_id: "ghost", n: 0, label: "", status: "running", detail: {}, timestamp: 1,
+    } });
+    state = reducer(state, { type: "event", event: {
+      kind: "operation_end", op_id: "ghost", status: "complete", summary: "", detail: {}, timestamp: 2,
+    } });
+    expect(state.operations.size).toBe(0);
+  });
+
+  test("operation events are pushed to the timeline for FLOW", () => {
+    const state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "op1", op_type: "loop", family: "recurrence",
+      parent_op_id: null, agent_id: null, label: "l", status: "recurring", detail: {}, timestamp: 1,
+    } });
+    expect(state.timeline.map((e) => e.kind)).toContain("operation_start");
+  });
+
+  test("operations reset to an empty map on session_start", () => {
+    let state = reducer(initialState, { type: "event", event: {
+      kind: "operation_start", op_id: "op1", op_type: "loop", family: "recurrence",
+      parent_op_id: null, agent_id: null, label: "l", status: "recurring", detail: {}, timestamp: 1,
+    } });
+    expect(state.operations.size).toBe(1);
+    state = reducer(state, { type: "event", event: { kind: "session_start", name: "fresh", timestamp: 2 } });
+    expect(state.operations.size).toBe(0);
+  });
 });

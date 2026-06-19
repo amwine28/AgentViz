@@ -165,6 +165,35 @@ New pure module `ui/src/ingest/operations.ts`, called from `claudeCode.ts`:
 
 OTel ingestion (`ui/src/ingest/otel.ts`) operation mapping is OUT OF SCOPE (documented).
 
+### 4.1 Grounding corrections — verified against the real 50-transcript corpus (2026-06-19)
+
+A post-build adversarial grounded-only audit checked every extractor against the actual
+tool-input shapes in `~/.claude/projects/-Users-aaronwinegrad/*.jsonl`. Corrections applied:
+
+- **todo**: real `TaskCreate` = `{subject, description, activeForm}` (one task, no id);
+  real `TaskUpdate` = `{taskId, status}` (one status change). There is no `tasks[]` array.
+  Ingestion now models a **single evolving todo op per agent**: `total` = creations seen,
+  `completed`/`in_progress` derived from the latest status per `taskId`, accumulated across
+  the stream; each subsequent TaskCreate/TaskUpdate is a tick. The `{tasks:[...]}` array is
+  kept only as a fallback for the SDK live snapshot shape. (The store now merges each tick's
+  measured detail into the op so the `X/Y done` subtitle reflects current state.)
+- **schedule**: real `CronCreate` = `{cron, prompt, durable, recurring}` — no `name`. The
+  grounded label is the `prompt`. The collapse key is `schedule:${cron}:${prompt}` so two
+  distinct routines that share a cron expression (e.g. two `3 7 * * *` finance runs with
+  different prompts) stay **distinct**, not merged. CronList (no cron) never collapses.
+- **mcp**: an `mcp__<server>__<tool>` call now produces a `mcp` (command-family) op with
+  `detail = {server, tool}` parsed from the name. Previously `mcp` was a declared op_type
+  with no producer despite real `mcp__*` calls in the corpus.
+- **loop vs goal**: the `<<autonomous-loop-dynamic>>` sentinel arrives in the **`prompt`**
+  field (`delaySeconds` is always a clamped number), so the discriminator reads the prompt,
+  not the delay. (Was previously checking `delaySeconds` against the sentinel → `goal` was
+  never detected.)
+- **recurrence is fixture-validated only**: `ScheduleWakeup` appears **0 times** in the
+  current 50-transcript corpus, so the loop/goal path is exercised by
+  `examples/fixtures/claude_code_operations.json` against the ScheduleWakeup tool schema, not
+  by a captured real loop. When a real `/loop` or `/goal` run is captured, confirm the field
+  names and add a corpus-derived fixture.
+
 ## 5. UI — store + OPS lens + glyphs
 
 ### 5.1 Store (`ui/src/store.ts`)
@@ -228,6 +257,9 @@ OTel ingestion (`ui/src/ingest/otel.ts`) operation mapping is OUT OF SCOPE (docu
 
 ## 8. Out of scope (documented)
 - OTel operation mapping (`otel.ts`).
+- `hook` and `compact` op_types: declared in the taxonomy (and emittable by the live SDK),
+  but NOT produced by transcript ingestion in this pass — hooks/compact boundaries are not
+  tool_use blocks, so there is no grounded tool-call to lift them from yet. Deferred.
 - LangGraph/CrewAI operation emission (the adapters keep their credit focus).
 - Persisting operations to the run recorder beyond what the existing event tee does
   (operations ride the same event stream, so they are recorded for free).

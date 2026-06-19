@@ -11,9 +11,9 @@ export interface FlowLane {
 
 export interface FlowRow {
   event: AgentVizEvent;
-  lane: number;          // -1 for a full-width run-level band (terminal outcome)
+  lane: number;          // -1 for a full-width run-level band (terminal outcome / schedule)
   targetLane?: number;   // messages only
-  fullWidth?: boolean;   // run-level terminal outcome: spans all lanes
+  fullWidth?: boolean;   // run-level terminal outcome OR session-level schedule band: spans all lanes
 }
 
 export interface FlowLayout {
@@ -34,6 +34,10 @@ export function buildFlowLayout(timeline: AgentVizEvent[]): FlowLayout {
     laneIndex.set(agentId, idx);
     return idx;
   };
+
+  // op_id -> lane index of its owning agent (so a later tick can land on the
+  // same lane as its operation_start). Session-level ops never enter this map.
+  const opLane = new Map<string, number>();
 
   const rows: FlowRow[] = [];
   for (const event of timeline) {
@@ -62,6 +66,30 @@ export function buildFlowLayout(timeline: AgentVizEvent[]): FlowLayout {
           // agent-scoped intermediate signal → that agent's lane
           rows.push({ event, lane: laneFor(event.agent_id) });
         }
+        break;
+      case "operation_start":
+        // operations are the story (like outcomes/spawns). A session-level schedule
+        // (cron) op has no owning lane → render it as a full-width band; everything
+        // else sits on its owning agent's lane.
+        if (event.agent_id == null) {
+          rows.push({ event, lane: -1, fullWidth: true });
+        } else {
+          const lane = laneFor(event.agent_id);
+          opLane.set(event.op_id, lane);
+          rows.push({ event, lane });
+        }
+        break;
+      case "operation_end": {
+        // operation_end carries only op_id — recover its lane from the start it
+        // matches; an end for a session-level (or unseen) op is a full-width band.
+        const lane = opLane.get(event.op_id);
+        rows.push(lane !== undefined ? { event, lane } : { event, lane: -1, fullWidth: true });
+        break;
+      }
+      case "operation_tick":
+        // a tick has no agent_id of its own — pin it to its op's lane if we have
+        // seen the op on an agent lane, else a full-width band (a recurrence beat).
+        rows.push({ event, lane: opLane.get(event.op_id) ?? -1, fullWidth: !opLane.has(event.op_id) });
         break;
       default:
         break; // non-narrative kinds never reach the timeline

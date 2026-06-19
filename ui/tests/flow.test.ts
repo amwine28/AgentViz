@@ -61,6 +61,38 @@ describe("buildFlowLayout outcomes", () => {
   });
 });
 
+describe("buildFlowLayout operations", () => {
+  test("an agent-scoped operation sits on its agent's lane; its end + ticks follow it", () => {
+    const layout = buildFlowLayout(t([
+      { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "orch", timestamp: 1 },
+      { kind: "operation_start", op_id: "op1", op_type: "skill", family: "command", parent_op_id: null, agent_id: "a1", label: "/build", status: "running", detail: {}, timestamp: 2 },
+      { kind: "operation_tick", op_id: "op1", n: 0, label: "", status: "running", detail: {}, timestamp: 3 },
+      { kind: "operation_end", op_id: "op1", status: "complete", summary: "done", detail: {}, timestamp: 4 },
+    ]));
+    const start = layout.rows.find((r) => r.event.kind === "operation_start")!;
+    const tick = layout.rows.find((r) => r.event.kind === "operation_tick")!;
+    const end = layout.rows.find((r) => r.event.kind === "operation_end")!;
+    expect(start.lane).toBe(0);
+    expect(start.fullWidth).toBeFalsy();
+    expect(tick.lane).toBe(0);
+    expect(end.lane).toBe(0);
+  });
+
+  test("a session-level schedule op is a full-width band (lane -1)", () => {
+    const layout = buildFlowLayout(t([
+      { kind: "agent_spawn", agent_id: "a1", parent_id: null, name: "orch", timestamp: 1 },
+      { kind: "operation_start", op_id: "cron1", op_type: "schedule", family: "recurrence", parent_op_id: null, agent_id: null, label: "nightly", status: "recurring", detail: { cron: "0 0 * * *" }, timestamp: 2 },
+      { kind: "operation_tick", op_id: "cron1", n: 1, label: "fire", status: "recurring", detail: {}, timestamp: 3 },
+    ]));
+    const start = layout.rows.find((r) => r.event.kind === "operation_start")!;
+    const tick = layout.rows.find((r) => r.event.kind === "operation_tick")!;
+    expect(start.lane).toBe(-1);
+    expect(start.fullWidth).toBe(true);
+    // a tick for a session-level op has no lane → full-width beat
+    expect(tick.fullWidth).toBe(true);
+  });
+});
+
 describe("groupFlowRows", () => {
   const noisy = buildFlowLayout(t([
     { kind: "agent_spawn", agent_id: "a", parent_id: null, name: "a", timestamp: 1 },

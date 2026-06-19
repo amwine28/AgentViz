@@ -1,6 +1,6 @@
 import type {
   AgentVizEvent, AgentNode, MessageEdge, AgentStatus, OutcomeEvent, CreditAgentEntry,
-  RecommendationEntry,
+  RecommendationEntry, OperationState,
 } from "./types";
 
 // One per credit method (counterfactual/shapley/densified); published by a harness.
@@ -42,6 +42,7 @@ export interface AppState {
   creditReports: Record<string, CreditReportState>; // key = method; causal credit (Rungs 2-4)
   recommendations: RecommendationEntry[]; // grounded actions derived from measured credit
   recommendationsChannel: string;         // the reward channel the recommendations are about
+  operations: Map<string, OperationState>; // agentic/workflow operations forest; key = op_id
   dryRun: boolean; // mock-side-effects re-run mode (from session_start)
 }
 
@@ -61,6 +62,7 @@ export const initialState: AppState = {
   creditReports: {},
   recommendations: [],
   recommendationsChannel: "",
+  operations: new Map(),
   dryRun: false,
 };
 
@@ -68,6 +70,7 @@ const TIMELINE_CAP = 5000;
 const NARRATIVE_KINDS = new Set<string>([
   "agent_spawn", "agent_message", "tool_call_pending", "tool_result",
   "tool_denied", "log", "agent_complete", "outcome",
+  "operation_start", "operation_tick", "operation_end",
 ]);
 
 type Action =
@@ -122,8 +125,10 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
   switch (event.kind) {
     case "session_start":
       // New session owns the canvas: drop prior agents/edges, keep connection.
+      // operations gets a FRESH Map (initialState's is a shared instance).
       return {
         ...initialState,
+        operations: new Map(),
         connected: state.connected,
         sessionName: event.name,
         dryRun: event.dry_run ?? false,
@@ -262,6 +267,47 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
           measured: prev.measured && event.measured,
         } },
       } } };
+    }
+    case "operation_start": {
+      // Create the OperationState; link it into its parent's children (if known).
+      const operations = new Map(state.operations);
+      const op: OperationState = {
+        op_id: event.op_id, op_type: event.op_type, family: event.family,
+        parent_op_id: event.parent_op_id, agent_id: event.agent_id, label: event.label,
+        status: event.status, detail: event.detail, ticks: [],
+        started_at: event.timestamp, ended_at: null, end_status: null, children: [],
+      };
+      operations.set(event.op_id, op);
+      if (event.parent_op_id) {
+        const parent = operations.get(event.parent_op_id);
+        if (parent && !parent.children.includes(event.op_id)) {
+          operations.set(event.parent_op_id, { ...parent, children: [...parent.children, event.op_id] });
+        }
+      }
+      return { ...state, operations };
+    }
+    case "operation_tick": {
+      const op = state.operations.get(event.op_id);
+      if (!op) return state;   // tick for an unknown op — ignore (honest, no fabrication)
+      const operations = new Map(state.operations);
+      // The latest tick's measured detail becomes the op's current detail (grounded:
+      // e.g. a todo list's running total/completed evolves across TaskUpdate ticks).
+      operations.set(event.op_id, { ...op, status: event.status,
+        detail: { ...op.detail, ...event.detail },
+        ticks: [...op.ticks, {
+          n: event.n, label: event.label, status: event.status, detail: event.detail, timestamp: event.timestamp,
+        }] });
+      return { ...state, operations };
+    }
+    case "operation_end": {
+      const op = state.operations.get(event.op_id);
+      if (!op) return state;
+      const operations = new Map(state.operations);
+      operations.set(event.op_id, {
+        ...op, status: event.status, ended_at: event.timestamp, end_status: event.status,
+        detail: { ...op.detail, ...event.detail },
+      });
+      return { ...state, operations };
     }
     default:
       return state;

@@ -1,4 +1,5 @@
 import type { AgentVizEvent } from "../types";
+import { operationsFromTools } from "./operations";
 
 /** Claude Code transcript → AgentViz events (observer-only ingestion, §5.1).
  *
@@ -15,7 +16,7 @@ import type { AgentVizEvent } from "../types";
 
 const SPAWN_TOOLS = new Set(["Agent", "Task", "Workflow"]);
 
-interface CCBlock { type: string; id?: string; name?: string; input?: Record<string, unknown>; tool_use_id?: string; is_error?: boolean; content?: unknown; }
+export interface CCBlock { type: string; id?: string; name?: string; input?: Record<string, unknown>; tool_use_id?: string; is_error?: boolean; content?: unknown; }
 interface CCMessage { id?: string; model?: string; content?: CCBlock[]; usage?: { input_tokens?: number; output_tokens?: number }; }
 export interface CCLine { type: string; timestamp?: string; message?: CCMessage; aiTitle?: string; }
 export interface CCSubagent { agentId: string; meta: { toolUseId?: string; description?: string; agentType?: string }; lines: CCLine[]; }
@@ -139,6 +140,17 @@ export function claudeCodeToEvents(session: CCSession): AgentVizEvent[] {
 
   for (const id of order) {
     processAgent(id, id === rootId ? session.lines : subById.get(id)?.lines ?? []);
+  }
+
+  // ---- operation overlay (additive) ----
+  // Lift agentic/workflow operations (Workflow/Skill/Agent/loop/...) into the
+  // operation vocabulary and MERGE them in, re-stamping through the same per-key
+  // seq counter so the combined stream stays contiguous per key (gap detection).
+  // Existing leaf-tool, spawn-edge, message, usage events above are untouched.
+  for (const op of operationsFromTools(session)) {
+    const { seq: _drop, ...rest } = op as unknown as Record<string, unknown> & { seq?: number };
+    void _drop;
+    push(rest);
   }
   return out;
 }
