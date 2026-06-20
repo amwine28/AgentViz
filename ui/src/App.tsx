@@ -1,13 +1,16 @@
 /// <reference types="vite/client" />
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
-import { rootReducer, initialMultiState, activeWorld } from "./multiStore";
+import { rootReducer, initialMultiState, activeWorld, sessionTabs } from "./multiStore";
 import { emptyWorld } from "./store";
+import { getShell, setShellView, setShellFun, cycleView, type ShellMap } from "./shell/useShellState";
 import { createWsConnection } from "./ws";
 import { Graph } from "./components/Graph";
 import { Scene3D } from "./components/Scene3D";
 import { NodeDetailPanel } from "./components/NodeDetailPanel";
 import { MessageThread } from "./components/MessageThread";
 import { TopBar } from "./components/TopBar";
+import { TabStrip } from "./components/TabStrip";
+import { ViewSwitch } from "./components/ViewSwitch";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { GraphStats } from "./components/GraphStats";
@@ -17,7 +20,6 @@ import { RunPicker } from "./components/RunPicker";
 import type { ViewMode, AgentVizEvent } from "./types";
 
 // Served by the relay itself in production, so the ws port is our own port.
-// Vite dev server is the only case where we fall back to the default.
 const RELAY_PORT = import.meta.env.DEV ? 3333 : Number(window.location.port) || 3333;
 
 const LEGEND = [
@@ -26,19 +28,26 @@ const LEGEND = [
   { color: "#34d17e", label: "complete", ring: false },
   { color: "#ff5277", label: "error", ring: false },
   { color: "#8b9bb4", label: "paused", ring: false },
-  // approval is drawn as a pulsing torus ring in 3D, not a filled dot
   { color: "#ffd166", label: "needs approval", ring: true },
 ] as const;
 
 export function App() {
   const [state, dispatch] = useReducer(rootReducer, initialMultiState);
-  // v2: the active tab's world. Tab UI arrives in Phase 4; for now we render the
-  // single active session (first to appear), so behavior matches single-session.
   const world = activeWorld(state) ?? emptyWorld();
-  const [view, setView] = useState<ViewMode>("3d");
+
   const [showRuns, setShowRuns] = useState(false);
-  const [funMode, setFunMode] = useState(false);
+  const [shell, setShell] = useState<ShellMap>({});
   const sendRef = useRef<((cmd: object) => string) | null>(null);
+
+  // Per-tab view + Hyperdrive (each tab remembers its own).
+  const ui = getShell(shell, state.activeId);
+  const view = ui.view;
+  const funMode = ui.funMode;
+  const shellKey = state.activeId ?? "_pending";
+  const setView = (v: ViewMode) => setShell((m) => setShellView(m, shellKey, v));
+  const toggleFun = () => setShell((m) => setShellFun(m, shellKey, !getShell(m, shellKey).funMode));
+
+  const tabs = sessionTabs(state);
 
   const loadRun = useCallback((events: object[]) =>
     dispatch({ type: "batch_events", events: events as AgentVizEvent[] }), []);
@@ -49,19 +58,18 @@ export function App() {
     return conn.cleanup;
   }, []);
 
+  // V cycles the active tab's view; F toggles Hyperdrive. Re-bound on tab switch.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      const id = state.activeId ?? "_pending";
       const k = e.key.toLowerCase();
-      if (k === "v") {
-        setView((v) => (v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "credit" : v === "credit" ? "ops" : "3d"));
-      } else if (k === "f") {
-        setFunMode((f) => !f);
-      }
+      if (k === "v") setShell((m) => setShellView(m, id, cycleView(getShell(m, id).view)));
+      else if (k === "f") setShell((m) => setShellFun(m, id, !getShell(m, id).funMode));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [state.activeId]);
 
   const sendCommand = useCallback((cmd: object): string => {
     return sendRef.current?.(cmd) ?? "";
@@ -89,6 +97,13 @@ export function App() {
 
   return (
     <div className="app">
+      <TabStrip
+        tabs={tabs}
+        onSelect={(id) => dispatch({ type: "set_active_session", session_id: id })}
+        onClose={(id) => dispatch({ type: "close_session", session_id: id })}
+        onRename={(id, name) => dispatch({ type: "rename_session", session_id: id, name })}
+      />
+
       <TopBar
         connected={state.connected}
         sessionName={world.sessionName}
@@ -96,17 +111,15 @@ export function App() {
         agentCount={agentList.length}
         eventCount={world.eventCount}
         droppedCount={world.droppedCount}
-        view={view}
         dryRun={world.dryRun}
-        funMode={funMode}
-        onToggleFun={() => setFunMode((f) => !f)}
-        onSetView={setView}
         onOpenRuns={() => setShowRuns(true)}
         onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
         onStopAll={() => sendCommand({ kind: "agent_stop", agent_id: null })}
       />
 
       <div className="stage">
+        <ViewSwitch view={view} onSetView={setView} funMode={funMode} onToggleFun={toggleFun} />
+
         {view === "3d" ? (
           <Scene3D
             agents={world.agents}
