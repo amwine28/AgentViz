@@ -1,10 +1,18 @@
 import { WebSocketServer, WebSocket, ServerOptions } from "ws";
 import { IncomingMessage, Server as HttpServer } from "http";
-import { SessionBuffer } from "./buffer";
+import { SessionRegistry } from "./sessions";
 import { RunRecorder } from "./recorder";
 
+const LEGACY_SESSION = "_legacy";
+
+function sessionIdOf(event: unknown): string {
+  const sid = event && typeof event === "object" ? (event as { session_id?: unknown }).session_id : undefined;
+  return typeof sid === "string" && sid ? sid : LEGACY_SESSION;
+}
+
 export function createRelay(portOrServer: number | HttpServer, recorder?: RunRecorder) {
-  const buffer = new SessionBuffer();
+  // One buffer per session id — a new session no longer wipes the others.
+  const registry = new SessionRegistry();
   const sdkClients = new Set<WebSocket>();
   const browserClients = new Set<WebSocket>();
 
@@ -30,13 +38,14 @@ export function createRelay(portOrServer: number | HttpServer, recorder?: RunRec
       ws.on("message", (data) => {
         try {
           const event = JSON.parse(data.toString());
-          // A new session owns the buffer — prevents ghost events from
-          // previous runs replaying into freshly connected browsers.
-          if (event && event.kind === "session_start") {
-            buffer.clear();
-          }
-          recorder?.record(event);   // durable per-run log (Phase E persistence)
-          buffer.push(event);
+          const sid = sessionIdOf(event);
+          const isStart = event && event.kind === "session_start";
+          const { state } = registry.ensure(sid, isStart ? (event.name as string | undefined) : undefined);
+          state.sdkSockets.add(ws);
+          // session_start clears ONLY this session's buffer — never the others.
+          if (isStart) state.buffer.clear();
+          recorder?.record(event);   // durable per-run log (keyed run_id ?? session_id)
+          state.buffer.push(event);
           for (const browser of browserClients) {
             if (browser.readyState === WebSocket.OPEN) {
               try { browser.send(JSON.stringify(event)); } catch { /* ignore closed socket */ }
@@ -45,22 +54,26 @@ export function createRelay(portOrServer: number | HttpServer, recorder?: RunRec
         } catch { /* ignore malformed */ }
       });
 
-      ws.on("close", () => sdkClients.delete(ws));
-      ws.on("error", () => sdkClients.delete(ws));
+      const dropSdk = () => { sdkClients.delete(ws); registry.detachSocket(ws); };
+      ws.on("close", dropSdk);
+      ws.on("error", dropSdk);
     } else {
-      // Browser client — send buffer catch-up immediately
-      const catchUp = buffer.all();
+      // Browser catch-up: the union of every live session's buffer (each event
+      // carries its session_id, so the store fans them into the right tab).
+      const catchUp = registry.all().flatMap((s) => s.buffer.all());
       if (catchUp.length > 0) {
         try { ws.send(JSON.stringify(catchUp)); } catch { /* ignore closed socket */ }
       }
       browserClients.add(ws);
 
       ws.on("message", (data) => {
-        // Commands from browser → route to all SDK clients
-        // (SDK client filters by agent_id internally)
+        // Commands from browser → route to the SDK sockets OWNING the target
+        // session_id; if none is given, broadcast to all (legacy single-session).
         try {
           const cmd = JSON.parse(data.toString());
-          for (const sdk of sdkClients) {
+          const targetSid = typeof cmd.session_id === "string" && cmd.session_id ? cmd.session_id : null;
+          const targets = targetSid ? (registry.get(targetSid)?.sdkSockets ?? new Set<WebSocket>()) : sdkClients;
+          for (const sdk of targets) {
             if (sdk.readyState === WebSocket.OPEN) {
               try { sdk.send(JSON.stringify(cmd)); } catch { /* ignore closed socket */ }
             }
