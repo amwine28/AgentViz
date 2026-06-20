@@ -100,6 +100,17 @@ export function reducer(state: AppState, action: Action): AppState {
   }
 }
 
+// ---- v2 multi-session aliases ------------------------------------------------
+// The reducer/state above is the per-session engine, unchanged. multiStore.ts
+// wraps it: one SessionWorld per tab. Names kept so every existing import
+// (`AppState`, `reducer`, `initialState`) and all 139 tests stay byte-identical.
+export type SessionWorld = AppState;
+export const sessionReducer = reducer;
+/** A fresh, empty per-session world (fresh operations Map — never shared). */
+export function emptyWorld(): SessionWorld {
+  return { ...initialState, operations: new Map() };
+}
+
 function trackSeq(state: AppState, event: AgentVizEvent): AppState {
   const e = event as AgentVizEvent & { agent_id?: string; from_agent_id?: string };
   const next = { ...state, eventCount: state.eventCount + 1 };

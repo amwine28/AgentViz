@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
-import { reducer, initialState } from "./store";
+import { rootReducer, initialMultiState, activeWorld } from "./multiStore";
+import { emptyWorld } from "./store";
 import { createWsConnection } from "./ws";
 import { Graph } from "./components/Graph";
 import { Scene3D } from "./components/Scene3D";
@@ -30,7 +31,10 @@ const LEGEND = [
 ] as const;
 
 export function App() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(rootReducer, initialMultiState);
+  // v2: the active tab's world. Tab UI arrives in Phase 4; for now we render the
+  // single active session (first to appear), so behavior matches single-session.
+  const world = activeWorld(state) ?? emptyWorld();
   const [view, setView] = useState<ViewMode>("3d");
   const [showRuns, setShowRuns] = useState(false);
   const [funMode, setFunMode] = useState(false);
@@ -71,29 +75,29 @@ export function App() {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (showRuns) setShowRuns(false);
-      else if (state.selectedNodeId) selectNode(null);
-      else if (state.selectedEdgeKey) selectEdge(null);
+      else if (world.selectedNodeId) selectNode(null);
+      else if (world.selectedEdgeKey) selectEdge(null);
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [showRuns, state.selectedNodeId, state.selectedEdgeKey, selectNode, selectEdge]);
+  }, [showRuns, world.selectedNodeId, world.selectedEdgeKey, selectNode, selectEdge]);
 
-  const agentList = Object.values(state.agents);
+  const agentList = Object.values(world.agents);
   const runningCount = agentList.filter((a) => a.status === "running").length;
-  const selectedAgent = state.selectedNodeId ? state.agents[state.selectedNodeId] : null;
-  const panelOpen = Boolean(selectedAgent || (state.selectedEdgeKey && state.messageEdges[state.selectedEdgeKey]));
+  const selectedAgent = world.selectedNodeId ? world.agents[world.selectedNodeId] : null;
+  const panelOpen = Boolean(selectedAgent || (world.selectedEdgeKey && world.messageEdges[world.selectedEdgeKey]));
 
   return (
     <div className="app">
       <TopBar
         connected={state.connected}
-        sessionName={state.sessionName}
+        sessionName={world.sessionName}
         runningCount={runningCount}
         agentCount={agentList.length}
-        eventCount={state.eventCount}
-        droppedCount={state.droppedCount}
+        eventCount={world.eventCount}
+        droppedCount={world.droppedCount}
         view={view}
-        dryRun={state.dryRun}
+        dryRun={world.dryRun}
         funMode={funMode}
         onToggleFun={() => setFunMode((f) => !f)}
         onSetView={setView}
@@ -105,30 +109,30 @@ export function App() {
       <div className="stage">
         {view === "3d" ? (
           <Scene3D
-            agents={state.agents}
-            messageEdges={state.messageEdges}
-            operations={state.operations}
-            selectedNodeId={state.selectedNodeId}
+            agents={world.agents}
+            messageEdges={world.messageEdges}
+            operations={world.operations}
+            selectedNodeId={world.selectedNodeId}
             funMode={funMode}
             onSelectNode={selectNode}
           />
         ) : view === "flow" ? (
           <FlowView
-            timeline={state.timeline}
-            agents={state.agents}
+            timeline={world.timeline}
+            agents={world.agents}
             onSelectNode={selectNode}
           />
         ) : view === "credit" ? (
-          <CreditView state={state} onSelectNode={selectNode} />
+          <CreditView state={world} onSelectNode={selectNode} />
         ) : view === "ops" ? (
-          <OpsView operations={state.operations} onSelectNode={selectNode} />
+          <OpsView operations={world.operations} onSelectNode={selectNode} />
         ) : (
           <div className="stage-2d">
             <Graph
-              agents={state.agents}
-              messageEdges={state.messageEdges}
-              operations={state.operations}
-              selectedNodeId={state.selectedNodeId}
+              agents={world.agents}
+              messageEdges={world.messageEdges}
+              operations={world.operations}
+              selectedNodeId={world.selectedNodeId}
               onSelectNode={selectNode}
               onSelectEdge={selectEdge}
               onCommand={sendCommand}
@@ -136,7 +140,7 @@ export function App() {
           </div>
         )}
 
-        {agentList.length === 0 && !(view === "ops" && state.operations.size > 0) && (
+        {agentList.length === 0 && !(view === "ops" && world.operations.size > 0) && (
           <div className="empty-state">
             <div className="big">{state.connected ? "AWAITING SIGNAL" : "RELAY OFFLINE"}</div>
             <div className="hint">
@@ -154,17 +158,17 @@ export function App() {
             onCommand={sendCommand}
           />
         )}
-        {!selectedAgent && state.selectedEdgeKey && state.messageEdges[state.selectedEdgeKey] && (
+        {!selectedAgent && world.selectedEdgeKey && world.messageEdges[world.selectedEdgeKey] && (
           <MessageThread
-            edge={state.messageEdges[state.selectedEdgeKey]}
-            agents={state.agents}
+            edge={world.messageEdges[world.selectedEdgeKey]}
+            agents={world.agents}
             onClose={() => selectEdge(null)}
           />
         )}
 
-        {view === "2d" && <GraphStats state={state} />}
+        {view === "2d" && <GraphStats state={world} />}
 
-        <ApprovalQueue agents={state.agents} acks={state.acks} onCommand={sendCommand} />
+        <ApprovalQueue agents={world.agents} acks={world.acks} onCommand={sendCommand} />
 
         {showRuns && (
           <RunPicker port={RELAY_PORT} onLoad={loadRun} onClose={() => setShowRuns(false)} />
