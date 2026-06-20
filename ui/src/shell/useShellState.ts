@@ -25,8 +25,7 @@ export function setShellFun(map: ShellMap, id: string, funMode: boolean): ShellM
   return { ...map, [id]: { ...getShell(map, id), funMode } };
 }
 
-// V cycles the views; CREDIT/OPS still reachable here until Phase 5 folds them
-// into the analytics panel.
+// V cycles the spatial/temporal views. CREDIT/OPS now live in the Analytics panel.
 export function cycleView(v: ViewMode): ViewMode {
-  return v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "credit" : v === "credit" ? "ops" : "3d";
+  return v === "3d" ? "2d" : v === "2d" ? "flow" : "3d";
 }

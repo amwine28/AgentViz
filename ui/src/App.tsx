@@ -13,10 +13,9 @@ import { TabStrip } from "./components/TabStrip";
 import { ViewSwitch } from "./components/ViewSwitch";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
-import { GraphStats } from "./components/GraphStats";
-import { CreditView } from "./components/CreditView";
-import { OpsView } from "./components/OpsView";
 import { RunPicker } from "./components/RunPicker";
+import { AnalyticsPanel } from "./components/analytics/AnalyticsPanel";
+import { getAnalytics, setDock, toggleSection, type AnalyticsMap } from "./components/analytics/analyticsState";
 import type { ViewMode, AgentVizEvent } from "./types";
 
 // Served by the relay itself in production, so the ws port is our own port.
@@ -37,6 +36,7 @@ export function App() {
 
   const [showRuns, setShowRuns] = useState(false);
   const [shell, setShell] = useState<ShellMap>({});
+  const [analytics, setAnalytics] = useState<AnalyticsMap>({});
   const sendRef = useRef<((cmd: object) => string) | null>(null);
 
   // Per-tab view + Hyperdrive (each tab remembers its own).
@@ -46,6 +46,7 @@ export function App() {
   const shellKey = state.activeId ?? "_pending";
   const setView = (v: ViewMode) => setShell((m) => setShellView(m, shellKey, v));
   const toggleFun = () => setShell((m) => setShellFun(m, shellKey, !getShell(m, shellKey).funMode));
+  const analyticsUi = getAnalytics(analytics, state.activeId);
 
   const tabs = sessionTabs(state);
 
@@ -118,7 +119,13 @@ export function App() {
       />
 
       <div className="stage">
-        <ViewSwitch view={view} onSetView={setView} funMode={funMode} onToggleFun={toggleFun} />
+        <ViewSwitch
+          view={view}
+          onSetView={setView}
+          funMode={funMode}
+          onToggleFun={toggleFun}
+          shifted={analyticsUi.dock === "expanded"}
+        />
 
         {view === "3d" ? (
           <Scene3D
@@ -135,10 +142,6 @@ export function App() {
             agents={world.agents}
             onSelectNode={selectNode}
           />
-        ) : view === "credit" ? (
-          <CreditView state={world} onSelectNode={selectNode} />
-        ) : view === "ops" ? (
-          <OpsView operations={world.operations} onSelectNode={selectNode} />
         ) : (
           <div className="stage-2d">
             <Graph
@@ -153,7 +156,7 @@ export function App() {
           </div>
         )}
 
-        {agentList.length === 0 && !(view === "ops" && world.operations.size > 0) && (
+        {agentList.length === 0 && world.operations.size === 0 && (
           <div className="empty-state">
             <div className="big">{state.connected ? "AWAITING SIGNAL" : "RELAY OFFLINE"}</div>
             <div className="hint">
@@ -179,7 +182,13 @@ export function App() {
           />
         )}
 
-        {view === "2d" && <GraphStats state={world} />}
+        <AnalyticsPanel
+          world={world}
+          ui={analyticsUi}
+          onSetDock={(d) => setAnalytics((m) => setDock(m, shellKey, d))}
+          onToggleSection={(s) => setAnalytics((m) => toggleSection(m, shellKey, s))}
+          onSelectNode={selectNode}
+        />
 
         <ApprovalQueue agents={world.agents} acks={world.acks} onCommand={sendCommand} />
 

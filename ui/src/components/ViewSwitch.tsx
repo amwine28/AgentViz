@@ -4,9 +4,6 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "3d", label: "3D" },
   { id: "2d", label: "2D" },
   { id: "flow", label: "FLOW" },
-  // CREDIT/OPS stay here until Phase 5 moves them into the Analytics panel.
-  { id: "credit", label: "CREDIT" },
-  { id: "ops", label: "OPS" },
 ];
 
 // The view switcher, relocated to the upper-right corner of the stage.
@@ -15,14 +12,16 @@ export function ViewSwitch({
   onSetView,
   funMode,
   onToggleFun,
+  shifted,
 }: {
   view: ViewMode;
   onSetView: (v: ViewMode) => void;
   funMode: boolean;
   onToggleFun: () => void;
+  shifted?: boolean; // shift left when the analytics panel is expanded
 }) {
   return (
-    <div className="view-switch">
+    <div className={`view-switch ${shifted ? "shifted" : ""}`}>
       <div className="view-toggle" role="group" aria-label="Visualization view">
         {VIEWS.map((v, i) => (
           <span key={v.id} style={{ display: "contents" }}>
@@ -43,7 +42,7 @@ export function ViewSwitch({
           title="HYPERDRIVE — unleash the 3D world (F)"
         >✦ Hyperdrive</button>
       )}
-      <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW / CREDIT / OPS">[V]</span>
+      <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW">[V]</span>
     </div>
   );
 }

@@ -1076,4 +1076,95 @@ textarea, input { cursor: text; }
   display: flex;
   align-items: center;
   gap: 10px;
+  transition: right 0.18s ease;
+}
+/* slide left of the analytics panel (320px + 12px gutter) when it's open */
+.view-switch.shifted { right: 344px; }
+
+/* ---- v2: analytics panel (per-tab, dockable on the right edge) --- */
+/* minimized state: a thin vertical rail tab clinging to the right edge */
+.analytics-rail {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 14px 5px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.analytics-rail:hover { color: var(--ink); border-color: var(--line-bright); background: var(--surface-3); }
+.analytics-rail-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+/* expanded state: full-height dock, 320px wide */
+.analytics-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: 320px;
+  z-index: 38;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.analytics-body { flex: 1; overflow-y: auto; }
+
+.analytics-section { border-bottom: 1px solid var(--line); }
+.analytics-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--surface-2);
+  border: none;
+  color: var(--ink-dim);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-small);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  padding: 9px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.analytics-section-head:hover { color: var(--ink); }
+.analytics-caret { width: 10px; font-size: 9px; opacity: 0.7; }
+.analytics-section-body { padding: 2px 0 6px; }
+
+/* The section bodies embed GraphStats / CreditView / OpsView verbatim. Those
+   components are authored to fill the whole stage (position:absolute; inset:0),
+   so neutralize that here and let them flow inside the panel's scroll column. */
+.analytics-section-body .graph-stats,
+.analytics-section-body .credit-view,
+.analytics-section-body .ops-view {
+  position: static;
+  inset: auto;
+  top: auto;
+  left: auto;
+  width: auto;
+  overflow: visible;
+  padding: 4px 0;
+  background: none;
+}
+.analytics-section-body .credit-view,
+.analytics-section-body .ops-view { gap: 8px; }
+/* the ops "empty stage" centerer also fills the stage — make it inline */
+.analytics-section-body .ops-empty-stage {
+  position: static;
+  inset: auto;
+  padding: 12px 14px;
+  text-align: left;
 }
