@@ -17,7 +17,10 @@ export class RunRecorder {
   }
 
   record(event: unknown): void {
-    const rid = (event && typeof event === "object" && (event as { run_id?: unknown }).run_id) || "_norun";
+    // Key by run_id first (SDK runs, preserves replay), then session_id (v2
+    // non-SDK tabs), then _norun. Additive — never displaces run_id.
+    const ev = event as { run_id?: unknown; session_id?: unknown } | null;
+    const rid = (ev && typeof ev === "object" && (ev.run_id || ev.session_id)) || "_norun";
     const safe = String(rid).replace(/[^a-zA-Z0-9._-]/g, "_");
     try {
       fs.appendFileSync(path.join(this.dir, `${safe}.jsonl`), JSON.stringify(event) + "\n");

@@ -41,6 +41,11 @@ export interface SessionStartEvent {
   kind: "session_start";
   name: string;
   dry_run?: boolean;
+  // v2 multi-session: where this tab came from + grounding context (all optional)
+  session_id?: string;
+  source?: "claude-code" | "shell" | "sdk";
+  cwd?: string;
+  git_branch?: string;
   timestamp: number;
 }
 export interface CommandAckEvent {
@@ -199,7 +204,7 @@ export type AgentVizEvent = (
   | ToolResultEvent | ToolDeniedEvent | AgentMessageEvent | LogEvent | AgentCompleteEvent
   | CommandAckEvent | UsageEvent | OutcomeEvent | CreditReportEvent | RecommendationReportEvent
   | OperationStartEvent | OperationTickEvent | OperationEndEvent
-) & { seq?: number; run_id?: string };
+) & { seq?: number; run_id?: string; session_id?: string };
 
 // UI state shapes
 export interface AgentNode {

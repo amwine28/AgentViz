@@ -32,6 +32,17 @@ describe("RunRecorder", () => {
     expect(fs.existsSync(path.join(dir, "_norun.jsonl"))).toBe(true);
   });
 
+  test("v2: keys on session_id when run_id absent; run_id still wins when both present", () => {
+    const dir = tmpDir();
+    const rec = new RunRecorder(dir);
+    rec.record({ kind: "log", content: "shell tab", session_id: "tab-7" });
+    rec.record({ kind: "agent_spawn", agent_id: "a1", run_id: "run-A", session_id: "tab-7" });
+    expect(fs.existsSync(path.join(dir, "tab-7.jsonl"))).toBe(true);
+    // run_id takes precedence so SDK replay keys stay stable
+    expect(fs.existsSync(path.join(dir, "run-A.jsonl"))).toBe(true);
+    expect(fs.readFileSync(path.join(dir, "tab-7.jsonl"), "utf8").trim().split("\n")).toHaveLength(1);
+  });
+
   test("createRelay tees SDK events to the recorder", (done) => {
     const dir = tmpDir();
     const relay = createRelay(0, new RunRecorder(dir));

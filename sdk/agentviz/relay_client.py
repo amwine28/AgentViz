@@ -29,6 +29,7 @@ class RelayClient:
         self._pending_send: dict | None = None  # in-flight event retained across reconnects
         self._seq: dict[str, int] = {}
         self.run_id: str | None = None   # stamped on every event (set by Session)
+        self.session_id: str | None = None  # v2 multi-session tab id (set by Session = run_id)
         self._connected = asyncio.Event()
         self._closing = False
         self._run_task: asyncio.Task | None = None
@@ -54,6 +55,8 @@ class RelayClient:
         self._stamp_seq(payload)
         if self.run_id is not None:
             payload["run_id"] = self.run_id
+        if self.session_id is not None:
+            payload.setdefault("session_id", self.session_id)
         try:
             self._queue.put_nowait(payload)
         except asyncio.QueueFull:

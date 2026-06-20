@@ -57,6 +57,10 @@ class SessionStartEvent:
     kind: Literal["session_start"] = field(default="session_start", init=False)
     name: str = ""
     dry_run: bool = False   # mock-side-effects re-run mode (no external side effects)
+    # v2 multi-session: origin + grounding context for the tab (all optional)
+    source: Literal["claude-code", "shell", "sdk"] | None = None
+    cwd: str | None = None
+    git_branch: str | None = None
     timestamp: float = field(default_factory=_now)
 
 @dataclass

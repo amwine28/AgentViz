@@ -93,10 +93,11 @@ class Session:
 
         self._client = RelayClient(port=port)
         self._client.run_id = self.run_id   # stamp run_id on every event, incl. session_start
+        self._client.session_id = self.run_id  # v2: this SDK run is one tab; session_id = run_id
         self._client.on_command("tool_approve", self._dispatch_tool_approval)
         self._client.on_command("tool_deny", self._dispatch_tool_denial)
         await self._client.connect(wait_timeout=wait_timeout)
-        await self._client.send(serialize(SessionStartEvent(name=self.name, dry_run=self.dry_run)))
+        await self._client.send(serialize(SessionStartEvent(name=self.name, dry_run=self.dry_run, source="sdk")))
 
     async def close(self, flush_timeout: float = 2.0) -> None:
         if self._client:
