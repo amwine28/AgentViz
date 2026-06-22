@@ -11,6 +11,12 @@
 > session (getcwd/read EPERM). ~/dev is not TCC-protected, so it can't recur. After any
 > fresh clone/move, run `pip install -e ~/dev/AgentViz/sdk` to re-point the editable SDK.
 >
+> LATEST (2026-06-22): the V2 SHELL OVERHAUL shipped — AgentViz is now a multi-session,
+> tabbed, light-default, one-window workspace where each terminal opts in by running the
+> `agentviz` command. See "## V2 SHELL OVERHAUL" near the bottom (current top of the
+> chronology). ALL pushed (origin/main tip 92542c0). The credit/operations sections below
+> are prior, still-valid workstreams.
+>
 > ACTIVE (2026-06-17): USABILITY pivot — making the analytic reach real users. Re-run engine
 > is COMPLETE; live Rung-2 credit now works on a REAL framework via the LangGraph adapter
 > (see "## USABILITY" section below). Earlier active workstream was the re-run engine (Phase E,
@@ -306,12 +312,22 @@ TDD build agents + 2 parallel adversarial verifiers, both verdict=ship):
 
 ## How to verify
 - SDK:   cd sdk && python3 -m pytest tests/ -q
-- UI:    cd ui && npx vitest run && npx tsc --noEmit
-- Relay: cd relay && npm test && npm run build
-- E2E:   kill any stale `node dist/index.js` on the relay port, then python3 examples/integration_test.py
+- UI:    cd ui && npx vitest run && npx tsc --noEmit   (161 tests as of 2026-06-22)
+- Relay: cd relay && npm test && npm run build         (26 jest tests as of 2026-06-22)
+- E2E:   kill the stale relay BY PID (read ~/.agentviz/relay.json → pid; NEVER `pkill -f node…` —
+         see Gotchas), then python3 examples/integration_test.py
+- 2D/views in headless: 3D crashes headless without a GPU (WebGL) and, lacking an error boundary,
+  blanks the whole app — add `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
+  To inspect/switch views in headless, drive Chrome over CDP (remote-debugging-port + Page/Runtime)
+  rather than one-shot --screenshot; the MCP Playwright browser is often lock-held by a parallel session.
 
 ## Gotchas discovered
 - Relay uses jest (npm test), UI uses vitest. Don't mix.
+- NEVER `pkill -f "node dist/index.js"` (or any broad node/relay pattern): the OWNER usually has a
+  live relay running, and that pattern matches it too — on 2026-06-22 a smoke-test pkill killed
+  Aaron's relay (its SIGTERM removed ~/.agentviz/relay.json), restored via `agentviz.sh --no-browser`.
+  Kill test processes BY CAPTURED PID, or isolate a test relay with HOME=/tmp/… (own port file) and
+  kill that pid. The relay multiplexes sessions now, so a test can also just use a throwaway session_id.
 - Stale relay on 3333 with dirty buffer replays ghost events — kill before E2E
   (session_start buffer reset fixes this once built).
 - pytest-asyncio provides unused_tcp_port fixture.
@@ -353,5 +369,79 @@ client-side playback engine: re-feed a finished run's timestamped events into th
 spaced by Δtimestamp/speed (play/pause/scrub + speed dial 0.1x→"hyper"=no delay). Works in every
 lens incl. OPS. Builds on existing recorded-runs infra (relay/src/recorder.ts + runs.ts +
 RunPicker.tsx; replay-claude-code.ts already has --speed). Optional: per-agent speed encoding from
-measured durations. SEQUENCE AFTER operations (so playback covers operation_start/tick/end). Do
-this next.
+measured durations. SEQUENCE AFTER operations (so playback covers operation_start/tick/end).
+(STATUS 2026-06-22: still queued — the V2 SHELL OVERHAUL below was built first. Playback tempo
+is the next un-started roadmap item.)
+
+## V2 SHELL OVERHAUL (2026-06-20 → 22) — multi-session · tabs · light-default · opt-in terminals
+Owner ask: turn AgentViz from a single-session visualizer into a one-window, multi-tab workspace
+that shows every terminal the user OPTS IN, with a professional light-default look, view toggles in
+the upper-right, and a consolidated per-tab analytics panel. Ran brainstorming → approved spec →
+ultracode-approved phased build (Aaron: "yes do this using ultracode"). SPEC (SOURCE OF TRUTH):
+docs/superpowers/specs/2026-06-20-agentviz-v2-shell-design.md. ALL PUSHED (origin/main tip 92542c0).
+
+Built as 7 phases, each its own commit (collision protocol: a concurrent session also edits this
+repo — re-fetch + check working tree before every write phase; commits held local, pushed at
+milestones):
+- PHASE 1 — additive session_id contract. Every event may carry an optional `session_id` (wire +
+  sdk/agentviz/relay_client.py + session.py + events.py SessionStartEvent gains source/cwd/git_branch);
+  recorder keys on run_id||session_id||"_norun". Absent → "_legacy". Byte-compatible with v1.
+- PHASE 2 — relay multiplex. relay/src/sessions.ts SessionRegistry (per-session buffer + sdkSockets);
+  relay.ts routes by sessionIdOf(event); session_start clears ONLY that session's buffer; browser
+  catch-up = union of all session buffers; browser commands route to the owning session's sockets.
+- PHASE 3 — multi-session store. ui/src/multiStore.ts MultiState {sessions, order, activeId, names,
+  connected} + rootReducer wrapping the BYTE-IDENTICAL per-session reducer (store.ts unchanged; added
+  aliases SessionWorld/sessionReducer/emptyWorld). Selectors activeWorld(s), sessionTabs(s)→TabMeta.
+- PHASE 4 — one-window shell. TabStrip.tsx (Chrome tabs, dbl-click rename, ×, no +, empty-state msg);
+  ViewSwitch.tsx (view toggles relocated to the stage's upper-right); TopBar trimmed. Per-tab UI state
+  (view/Hyperdrive) lives OUTSIDE the store: shell/useShellState.ts pure helpers, App holds one map.
+- PHASE 5 — consolidated Analytics panel. components/analytics/AnalyticsPanel.tsx + analyticsState.ts
+  (per-tab dock expanded/minimized + open sections). CREDIT and OPS are NO LONGER views — the V-cycle
+  is now 3-way (3D/2D/FLOW); CREDIT/OPS/graph-stats/audit moved into the right-edge dockable panel
+  (minimizes to a rail), embedding GraphStats/CreditView/OpsView verbatim (CSS neutralizes their
+  full-stage absolute positioning).
+- PHASE 6 — light/dark theme system. styles.css :root split into theme-agnostic + LIGHT (default,
+  "Warm Technical": cream paper, near-black ink, one drafting-blue accent, hairline cards, NO
+  glow/scanlines) + DARK (the original graphite). The two accent base colors are RGB-CHANNEL tokens
+  (--line-rgb / --accent-rgb) so every inline rgba re-tones; scanline/grain/vignette is dark-only.
+  Fonts: Hanken Grotesk (display) + Spline Sans Mono (data), replacing Chakra Petch/IBM Plex Mono.
+  ⚙ Settings gear in TopBar → Light/Dark toggle (SettingsMenu.tsx, theme/theme.ts, no-flash inline
+  script in index.html). Scene3D follows the theme (paper field + no resting bloom + no starfield in
+  light); Hyperdrive stays the opt-in neon spectacle. NOTE: an uncaught WebGL-context error (no GPU)
+  currently blanks the WHOLE app (no error boundary around the 3D view) — future hardening.
+- PHASE 7 — opt-in shell hook + LIVE Claude Code transcript tailer. relay gains POST /ingest (HTTP
+  event ingest; createRelay exposes a shared ingest() used by both WS /sdk and HTTP). relay/src/
+  tail-claude-code.ts live-tails a transcript: reuses the tested claudeCodeToEvents translator,
+  re-translates on append + streams only the new tail (pure nextBatch cursor), stamps session_id,
+  sends ONE authoritative session_start (source/cwd/branch) and FILTERS the translator's own (else it
+  clears the session buffer mid-stream); fs.watch + 1.5s poll; fail-open. replay-claude-code.ts main()
+  now guarded by require.main (importing loadClaudeCodeSession no longer fires a replay). tail/replay/
+  otel are EXCLUDED from the relay tsc build (cross-package ui import; run via ts-node). PER-TERMINAL
+  OPT-IN (corrected 2026-06-22 — see fixes): `agentviz.sh install`/`uninstall` manage a marked block
+  in ~/.zshrc that sources scripts/agentviz-shell.zsh, which only DEFINES the `agentviz` command + arms
+  INERT preexec/precmd/zshexit. A terminal appears ONLY when the user runs `agentviz` in it (sets
+  AGENTVIZ_ON, registers via scripts/agentviz-attach.sh, opens/focuses the window); then it streams each
+  REAL command as tool_call_pending→tool_result on a "shell" agent, and a `claude` launch spawns the
+  tailer for that tab. `agentviz off`/`status`. Every emit backgrounded w/ 1s cap, fail-open. GROUNDED:
+  only real transcripts/commands, only from terminals the user opted in.
+
+FIXES (2026-06-22, after Aaron's review):
+- Opt-in was initially auto-pickup-every-shell — WRONG. Corrected to per-terminal explicit `agentviz`
+  invocation (above). Aaron: "each window that pops up must be invoked by the user."
+- 2D view looked broken on the light theme: the D3 graph hardcoded dark node fills (#0a1020) + faint
+  labels (#8fa3c4), invisible on cream. Moved fill/label/edge/arrow to theme-token CSS classes
+  (g2-node/g2-label/g2-edge-spawn/g2-edge-msg/g2-arrow*); per-node status STROKE stays phosphor. It
+  WAS always rendering (verified 73 nodes/144 edges/73 labels via headless-Chrome CDP) — just unreadable.
+- View switch was stuck on the empty (no-session) screen: getShell(map, null) returns the default, so
+  read used a different key than write. App now reads+writes per-tab UI with ONE shellKey
+  (state.activeId ?? "_pending"). Empty-state hint now says: run `agentviz` in a terminal.
+
+Tests across the overhaul: ui vitest 161 (incl. theme + analyticsState + multiStore), relay jest 26
+(incl. ingest fan-out + tailer pure helpers + transcript discovery), tsc + vite build green.
+Commits (origin/main): b3f6866 P1, e785ba8 P2, 870e2f8 P3, e146da1 P4, b2d5315 P5, 7b28afc P6,
+e2e3a63 P7, 87523f1 UI fixes, 92542c0 opt-in fix.
+
+NEXT candidates for v2: (1) error boundary around Scene3D so a WebGL failure falls back to 2D instead
+of blanking the app; (2) theme FLOW/3D node colors as fully as 2D now is (they're phosphor on the
+field — acceptable but could match the calmer light palette); (3) tab persistence of edited names
+client-side; (4) the queued PLAYBACK TEMPO controls.
