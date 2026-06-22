@@ -14,6 +14,7 @@ export interface MultiState {
   activeId: string | null;       // the tab currently shown
   names: Record<string, string>; // auto/user tab-name overrides
   connected: boolean;            // the GLOBAL socket flag (per-session connected is vestigial)
+  closed: Set<string>;           // sessions the user dismissed — ignore their stray events
 }
 
 export const initialMultiState: MultiState = {
@@ -22,6 +23,7 @@ export const initialMultiState: MultiState = {
   activeId: null,
   names: {},
   connected: false,
+  closed: new Set(),
 };
 
 export type RootAction =
@@ -40,6 +42,14 @@ function sidOf(event: AgentVizEvent): string {
 
 function routeEvent(s: MultiState, event: AgentVizEvent): MultiState {
   const sid = sidOf(event);
+  // A dismissed tab stays gone until it explicitly restarts (a fresh
+  // session_start re-opens it); all other stray events for it are ignored, so
+  // it can't silently resurrect on the next event or a browser reconnect.
+  if (s.closed.has(sid)) {
+    if (event.kind !== "session_start") return s;
+    const closed = new Set(s.closed); closed.delete(sid);
+    s = { ...s, closed };
+  }
   const existed = s.sessions[sid] !== undefined;
   const world = existed ? s.sessions[sid] : emptyWorld();
   const nextWorld = sessionReducer(world, { type: "event", event });
@@ -87,7 +97,8 @@ export function rootReducer(s: MultiState, action: RootAction): MultiState {
       delete names[action.session_id];
       const order = s.order.filter((id) => id !== action.session_id);
       const activeId = s.activeId === action.session_id ? (order[order.length - 1] ?? null) : s.activeId;
-      return { ...s, sessions, order, names, activeId };
+      const closed = new Set(s.closed); closed.add(action.session_id);
+      return { ...s, sessions, order, names, activeId, closed };
     }
     default:
       return s;

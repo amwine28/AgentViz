@@ -125,6 +125,16 @@ function trackSeq(state: AppState, event: AgentVizEvent): AppState {
   };
 }
 
+// Some producers (notably the shell hook over HTTP /ingest) can deliver a tool
+// call or log before the agent_spawn lands — HTTP ordering isn't guaranteed. Make
+// the node self-healing so those events aren't silently dropped.
+function minimalAgent(id: string): AgentNode {
+  return {
+    id, name: id, parent_id: null, status: "running",
+    completed_at: null, exit_status: null, tool_calls: [], logs: [],
+  };
+}
+
 function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
   let state = trackSeq(rawState, event);
   if (NARRATIVE_KINDS.has(event.kind)) {
@@ -178,8 +188,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       };
     }
     case "tool_call_pending": {
-      const agent = state.agents[event.agent_id];
-      if (!agent) return state;
+      const agent = state.agents[event.agent_id] ?? minimalAgent(event.agent_id);
       const tc = {
         call_id: event.call_id, name: event.name, args: event.args, pending: true,
         requested_at: event.timestamp, timeout_s: event.timeout_s,
@@ -232,8 +241,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       return { ...state, messageEdges: { ...state.messageEdges, [key]: updated } };
     }
     case "log": {
-      const agent = state.agents[event.agent_id];
-      if (!agent) return state;
+      const agent = state.agents[event.agent_id] ?? minimalAgent(event.agent_id);
       const log = { content: event.content, level: event.level, timestamp: event.timestamp };
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, logs: [...agent.logs, log] } } };
     }

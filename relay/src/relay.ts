@@ -76,6 +76,12 @@ export function createRelay(portOrServer: number | HttpServer, recorder?: RunRec
         // session_id; if none is given, broadcast to all (legacy single-session).
         try {
           const cmd = JSON.parse(data.toString());
+          // Tab closed in the browser → forget that session so a future
+          // reconnect's catch-up can't bring the tab back.
+          if (cmd && cmd.kind === "close_session" && typeof cmd.session_id === "string") {
+            registry.remove(cmd.session_id);
+            return;
+          }
           const targetSid = typeof cmd.session_id === "string" && cmd.session_id ? cmd.session_id : null;
           const targets = targetSid ? (registry.get(targetSid)?.sdkSockets ?? new Set<WebSocket>()) : sdkClients;
           for (const sdk of targets) {

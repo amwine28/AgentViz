@@ -81,8 +81,16 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [state.activeId]);
 
+  // Stamp the active tab's session id onto outgoing commands so an approve /
+  // inject / close can't leak into a different terminal's session (which may
+  // share an agent_id like "shell"). Commands that already name a session win.
+  const activeIdRef = useRef(state.activeId);
+  activeIdRef.current = state.activeId;
   const sendCommand = useCallback((cmd: object): string => {
-    return sendRef.current?.(cmd) ?? "";
+    const sid = activeIdRef.current;
+    const hasSid = typeof (cmd as { session_id?: unknown }).session_id === "string";
+    const out = !hasSid && sid && sid !== "_legacy" ? { ...cmd, session_id: sid } : cmd;
+    return sendRef.current?.(out) ?? "";
   }, []);
 
   const selectNode = useCallback((id: string | null) => dispatch({ type: "select_node", agent_id: id }), []);
@@ -110,7 +118,10 @@ export function App() {
       <TabStrip
         tabs={tabs}
         onSelect={(id) => dispatch({ type: "set_active_session", session_id: id })}
-        onClose={(id) => dispatch({ type: "close_session", session_id: id })}
+        onClose={(id) => {
+          dispatch({ type: "close_session", session_id: id });
+          sendCommand({ kind: "close_session", session_id: id }); // tell the relay to forget its buffer
+        }}
         onRename={(id, name) => dispatch({ type: "rename_session", session_id: id, name })}
       />
 

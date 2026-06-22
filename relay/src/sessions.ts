@@ -46,6 +46,12 @@ export class SessionRegistry {
     return this.sessions.get(id);
   }
 
+  /** Forget a session entirely (its buffer + sockets) — used when the user
+   *  closes the tab, so a later browser reconnect's catch-up won't resurrect it. */
+  remove(id: string): boolean {
+    return this.sessions.delete(id);
+  }
+
   all(): SessionState[] {
     return [...this.sessions.values()];
   }
