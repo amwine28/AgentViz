@@ -4,43 +4,21 @@
    Hairline HUD, phosphor status taxonomy, glass over the void.
    ============================================================ */
 
+/* ============================================================
+   THEME SYSTEM (Phase 6)
+   Two themes, switched by a `data-theme` attribute on <html>:
+     • LIGHT (default) — "Warm Technical": cream paper, near-black ink,
+       one drafting-blue accent, hairline-bordered solid cards, no glow.
+     • DARK — the calmer graphite mission-control surfaces, minus neon.
+   Color/type are entirely token-driven so the switch is one attribute.
+   --line-rgb / --accent-rgb carry RGB *channels* (not full colors) so the
+   many hairline / accent rgba(...) usages can re-tone per theme.
+   ============================================================ */
+
 :root {
-  --void-0: #04060d;
-  --void-1: #070b16;
-  --ink: #c9d7ee;
-  /* resting interactive / secondary text — raised to clear WCAG AA (~5.3:1 on void) */
-  --ink-dim: #8294b4;
-  /* labels & captions — raised from #33415c (~2:1, failed) to ~3.6:1 for load-bearing copy */
-  --ink-faint: #6b7d9c;
-  /* truly decorative hairline text only (countdown ticks, disabled hints) */
-  --ink-ghost: #46566f;
-  --glass: rgba(8, 14, 27, 0.66);
-  --glass-heavy: rgba(6, 11, 22, 0.85);
-  --line: rgba(125, 170, 255, 0.16);
-  --line-bright: rgba(125, 170, 255, 0.40);
-
-  --c-run: #3fe0ff;
-  /* shifted toward orange so it separates from the gold approval tone */
-  --c-wait: #ff9e3d;
-  /* deeper emerald so running(cyan) vs complete no longer converge under bloom */
-  --c-done: #34d17e;
-  --c-err: #ff5277;
-  --c-paused: #8b9bb4;
-  --c-approve: #ffd166;
-  /* message/flow edges — split from running cyan so "data flowing" ≠ "agent running" */
-  --c-msg: #7df3ff;
-  /* destructive UI intent, distinct from agent-error red */
-  --c-destructive: #e0566f;
-
-  --font-display: "Chakra Petch", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
-
-  /* Refined × Editorial: a graphite surface ramp so panels read as solid
-     cards over the void instead of barely-there glass. */
-  --surface-1: rgba(16, 23, 38, 0.82);   /* resting panel */
-  --surface-2: rgba(22, 30, 48, 0.92);   /* raised: titles, headers */
-  --surface-3: rgba(9, 14, 26, 0.9);     /* inset: inputs, wells */
-  --elev: 0 10px 34px -12px rgba(0, 0, 0, 0.7), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
+  /* ---- theme-agnostic: type, rhythm, geometry ---- */
+  --font-display: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono: "Spline Sans Mono", "IBM Plex Mono", ui-monospace, monospace;
   --radius: 8px;
 
   /* type scale — real, perceptible steps (was ~12 ad-hoc sizes) */
@@ -56,6 +34,78 @@
   --track-label: 0.18em;
   --track-ui: 0.1em;
   --track-tight: 0.02em;
+}
+
+/* ---- LIGHT (default) — "Warm Technical" ---- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --void-0: #e9e5db;   /* page edge: warm paper */
+  --void-1: #f4f1ea;   /* page center: lighter cream (subtle vignette) */
+  --ink: #1b1916;      /* primary text: warm near-black */
+  --ink-dim: #565146;  /* secondary / interactive text */
+  --ink-faint: #837d70;/* labels & captions */
+  --ink-ghost: #aaa496;/* decorative hairline text only */
+
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-heavy: rgba(252, 250, 245, 0.94);
+
+  --line-rgb: 38, 34, 26;                 /* warm near-black hairlines */
+  --line: rgba(var(--line-rgb), 0.14);
+  --line-bright: rgba(var(--line-rgb), 0.30);
+
+  --accent-rgb: 38, 86, 132;              /* drafting blue */
+  --c-run: #2b5f8c;     /* running / primary accent — drafting blue */
+  --c-wait: #b06f12;    /* amber, darkened to read on paper */
+  --c-done: #1f8a4c;    /* green */
+  --c-err: #c0344d;     /* red */
+  --c-paused: #6f6a5e;  /* slate */
+  --c-approve: #b07d10; /* gold, darkened */
+  --c-msg: #2b6f8c;     /* message/flow edges — teal-blue */
+  --c-destructive: #c0344d;
+
+  /* solid cards over paper, hairline-bordered (Software Tracker pattern) */
+  --surface-1: #ffffff;   /* resting panel */
+  --surface-2: #faf8f3;   /* raised: titles, headers */
+  --surface-3: #f1ede4;   /* inset: inputs, wells */
+  /* subtle shadow, NO glow (spec: light = no glow) */
+  --elev: 0 1px 2px rgba(20, 18, 12, 0.05), 0 10px 28px -16px rgba(20, 18, 12, 0.22);
+}
+
+/* ---- DARK — graphite mission control (the original surfaces) ---- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --void-0: #04060d;
+  --void-1: #070b16;
+  --ink: #c9d7ee;
+  --ink-dim: #8294b4;   /* AA ~5.3:1 on void */
+  --ink-faint: #6b7d9c; /* ~3.6:1 for load-bearing copy */
+  --ink-ghost: #46566f; /* decorative hairline text only */
+
+  --glass: rgba(8, 14, 27, 0.66);
+  --glass-heavy: rgba(6, 11, 22, 0.85);
+
+  --line-rgb: 125, 170, 255;
+  --line: rgba(var(--line-rgb), 0.16);
+  --line-bright: rgba(var(--line-rgb), 0.40);
+
+  --accent-rgb: 63, 224, 255;
+  --c-run: #3fe0ff;
+  --c-wait: #ff9e3d;    /* orange, separated from gold approval */
+  --c-done: #34d17e;    /* emerald, separated from cyan under bloom */
+  --c-err: #ff5277;
+  --c-paused: #8b9bb4;
+  --c-approve: #ffd166;
+  --c-msg: #7df3ff;     /* flow edges, split from running cyan */
+  --c-destructive: #e0566f;
+
+  /* graphite surface ramp — solid cards over the void, not glass */
+  --surface-1: rgba(16, 23, 38, 0.82);   /* resting panel */
+  --surface-2: rgba(22, 30, 48, 0.92);   /* raised: titles, headers */
+  --surface-3: rgba(9, 14, 26, 0.9);     /* inset: inputs, wells */
+  --elev: 0 10px 34px -12px rgba(0, 0, 0, 0.7), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,7 +132,7 @@ textarea, input { cursor: text; }
 :focus-visible {
   outline: 1px solid var(--c-run);
   outline-offset: 2px;
-  box-shadow: 0 0 8px rgba(63, 224, 255, 0.5);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
 }
 
 /* respect reduced-motion: kill the looping HUD animations */
@@ -94,7 +144,7 @@ textarea, input { cursor: text; }
   }
 }
 
-::selection { background: rgba(63, 224, 255, 0.25); }
+::selection { background: rgba(var(--accent-rgb), 0.25); }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -148,6 +198,12 @@ textarea, input { cursor: text; }
   inset: 0;
   background: radial-gradient(110% 110% at 50% 45%, transparent 58%, rgba(2, 4, 9, 0.35) 100%);
 }
+/* The grain/scanline/vignette is a dark-only texture — the light theme is a
+   clean paper canvas (spec: light = no scanlines, no glow). */
+.atmosphere::before,
+.atmosphere::after { display: none; }
+:root[data-theme="dark"] .atmosphere::before,
+:root[data-theme="dark"] .atmosphere::after { display: block; }
 
 /* ---- Top HUD bar ---------------------------------------------- */
 
@@ -258,7 +314,7 @@ textarea, input { cursor: text; }
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
 }
-.hud-btn:hover { color: var(--ink); border-color: var(--line-bright); background: rgba(125, 170, 255, 0.06); }
+.hud-btn:hover { color: var(--ink); border-color: var(--line-bright); background: rgba(var(--line-rgb), 0.06); }
 .hud-btn.danger:hover { color: var(--c-destructive); border-color: rgba(224, 86, 111, 0.6); background: rgba(224, 86, 111, 0.07); }
 
 /* HYPERDRIVE toggle — quiet at rest, gleefully unhinged when armed */
@@ -267,8 +323,8 @@ textarea, input { cursor: text; }
 .hud-btn.fun.active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(90deg, rgba(255, 45, 149, 0.3), rgba(63, 224, 255, 0.3), rgba(138, 92, 255, 0.3));
-  box-shadow: 0 0 16px rgba(138, 92, 255, 0.55), inset 0 0 10px rgba(63, 224, 255, 0.25);
+  background: linear-gradient(90deg, rgba(255, 45, 149, 0.3), rgba(var(--accent-rgb), 0.3), rgba(138, 92, 255, 0.3));
+  box-shadow: 0 0 16px rgba(138, 92, 255, 0.55), inset 0 0 10px rgba(var(--accent-rgb), 0.25);
   animation: fun-pulse 1.5s ease-in-out infinite;
 }
 @keyframes fun-pulse {
@@ -294,9 +350,9 @@ textarea, input { cursor: text; }
   transition: all 0.15s;
 }
 .view-toggle button.active {
-  background: rgba(63, 224, 255, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--c-run);
-  text-shadow: 0 0 10px rgba(63, 224, 255, 0.6);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.6);
 }
 .view-toggle .divider { width: 1px; background: var(--line); }
 
@@ -407,7 +463,7 @@ textarea, input { cursor: text; }
   padding: 2px 8px;
   border: 1px solid currentColor;
 }
-.status-running { color: var(--c-run); text-shadow: 0 0 8px rgba(63,224,255,.7); }
+.status-running { color: var(--c-run); text-shadow: 0 0 8px rgba(var(--accent-rgb), .7); }
 .status-waiting { color: var(--c-wait); }
 .status-complete { color: var(--c-done); }
 .status-error { color: var(--c-err); }
@@ -435,7 +491,7 @@ textarea, input { cursor: text; }
 
 .tc-row {
   padding: 8px 14px;
-  border-bottom: 1px solid rgba(125, 170, 255, 0.07);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.07);
 }
 .tc-row .tc-name { font-size: 11px; font-weight: 600; color: var(--ink); }
 .tc-row .tc-args {
@@ -453,7 +509,7 @@ textarea, input { cursor: text; }
   background: rgba(255, 209, 102, 0.05);
 }
 
-.log-row { padding: 4px 14px; font-size: 10px; color: var(--ink-dim); border-bottom: 1px solid rgba(125,170,255,.05); }
+.log-row { padding: 4px 14px; font-size: 10px; color: var(--ink-dim); border-bottom: 1px solid rgba(var(--line-rgb), .05); }
 .log-row.warn { color: var(--c-wait); }
 .log-row.error { color: var(--c-err); }
 
@@ -580,7 +636,7 @@ textarea, input { cursor: text; }
   flex-direction: column;
   overflow: hidden;
 }
-.msg-row { padding: 8px 14px; border-bottom: 1px solid rgba(125,170,255,.07); }
+.msg-row { padding: 8px 14px; border-bottom: 1px solid rgba(var(--line-rgb), .07); }
 .msg-row .msg-meta { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 3px; }
 .msg-row .msg-body { font-size: 11px; color: var(--ink); word-break: break-word; }
 
@@ -591,7 +647,7 @@ textarea, input { cursor: text; }
   inset: 0;
   overflow: auto;
   background:
-    repeating-linear-gradient(to bottom, transparent 0 25px, rgba(125, 170, 255, 0.03) 25px 26px),
+    repeating-linear-gradient(to bottom, transparent 0 25px, rgba(var(--line-rgb), 0.03) 25px 26px),
     radial-gradient(120% 90% at 50% 0%, var(--void-1) 0%, var(--void-0) 70%);
 }
 
@@ -613,7 +669,7 @@ textarea, input { cursor: text; }
   padding: 8px 6px;
   background: transparent;
   border: none;
-  border-right: 1px solid rgba(125, 170, 255, 0.07);
+  border-right: 1px solid rgba(var(--line-rgb), 0.07);
   color: var(--ink);
   font-family: var(--font-display);
   font-weight: 600;
@@ -622,7 +678,7 @@ textarea, input { cursor: text; }
   white-space: nowrap;
   overflow: hidden;
 }
-.flow-lane-header:hover { color: var(--c-run); background: rgba(63, 224, 255, 0.05); }
+.flow-lane-header:hover { color: var(--c-run); background: rgba(var(--accent-rgb), 0.05); }
 
 .flow-svg { display: block; }
 .flow-ts { fill: var(--ink-faint); font-size: 9px; font-family: var(--font-mono); }
@@ -665,7 +721,7 @@ textarea, input { cursor: text; }
   flex-direction: column;
   gap: 2px;
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(125, 170, 255, 0.07);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.07);
 }
 .stat.wide { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
 .stat .k {
@@ -693,7 +749,7 @@ textarea, input { cursor: text; }
   gap: 8px;
   align-items: baseline;
   padding: 7px 12px;
-  border-bottom: 1px solid rgba(125, 170, 255, 0.07);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.07);
 }
 .audit-finding .penalty {
   color: var(--c-err);
@@ -722,9 +778,9 @@ textarea, input { cursor: text; }
   line-height: 1;
   transition: all 0.15s;
 }
-.flow-chip.on { color: var(--c-run); border-color: var(--line-bright); background: rgba(63, 224, 255, 0.08); }
+.flow-chip.on { color: var(--c-run); border-color: var(--line-bright); background: rgba(var(--accent-rgb), 0.08); }
 .flow-section { cursor: pointer; }
-.flow-section:hover rect { stroke: rgba(125, 170, 255, 0.5); }
+.flow-section:hover rect { stroke: rgba(var(--line-rgb), 0.5); }
 
 /* ---- Credit lens (Rung 1) --------------------------------------- */
 
@@ -762,7 +818,7 @@ textarea, input { cursor: text; }
   margin: 8px 14px 0;
   padding: 8px 12px;
   border-left: 2px solid var(--c-run);
-  background: rgba(63,224,255,0.05);
+  background: rgba(var(--accent-rgb), 0.05);
   font-size: 11px; line-height: 1.5; color: var(--ink-dim);
 }
 .credit-sink { padding: 8px 14px 0; font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -781,14 +837,14 @@ textarea, input { cursor: text; }
   padding: 7px 14px;
 }
 .ctab-head { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); border-bottom: 1px solid var(--line); }
-.ctab-row { background: none; border: none; border-bottom: 1px solid rgba(125,170,255,0.07); text-align: left; width: 100%; }
-.ctab-row:hover { background: rgba(125,170,255,0.05); }
+.ctab-row { background: none; border: none; border-bottom: 1px solid rgba(var(--line-rgb), 0.07); text-align: left; width: 100%; }
+.ctab-row:hover { background: rgba(var(--line-rgb), 0.05); }
 .ctab-name { font-family: var(--font-display); font-weight: 600; font-size: 12px; color: var(--ink); }
 .ctab-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .ctab-reason { font-size: 10px; color: var(--ink-dim); line-height: 1.4; }
 
 .badge { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--line); color: var(--ink-dim); }
-.badge.path { color: var(--c-run); border-color: rgba(63,224,255,0.4); }
+.badge.path { color: var(--c-run); border-color: rgba(var(--accent-rgb), 0.4); }
 .badge.bottleneck { color: var(--c-approve); border-color: rgba(255,209,102,0.5); background: rgba(255,209,102,0.07); }
 .badge.loop { color: var(--c-wait); border-color: rgba(255,180,84,0.4); }
 .badge.basis-measured { color: var(--c-done); border-color: rgba(110,247,160,0.35); }
@@ -804,19 +860,19 @@ textarea, input { cursor: text; }
   padding: 7px 14px;
 }
 .cftab-head { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); border-bottom: 1px solid var(--line); }
-.cftab-row { border-bottom: 1px solid rgba(125,170,255,0.07); }
+.cftab-row { border-bottom: 1px solid rgba(var(--line-rgb), 0.07); }
 .cf-credit { position: relative; display: flex; align-items: center; gap: 8px; height: 16px; }
 .cf-bar { position: absolute; left: 0; top: 3px; height: 10px; opacity: 0.28; border-radius: 1px; }
 .cf-num { position: relative; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink); font-weight: 600; }
 .cf-ci { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-.cstate-estimated { color: var(--c-run); border-color: rgba(63,224,255,0.4); }
+.cstate-estimated { color: var(--c-run); border-color: rgba(var(--accent-rgb), 0.4); }
 .cstate-tight_null { color: var(--ink-faint); }
 .cstate-low_power_unknown { color: var(--c-wait); border-color: rgba(255,180,84,0.4); }
 .cstate-none { color: var(--ink-dim); }
 .credit-table.causal .panel-title span { color: var(--c-run); }
 
 .credit-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 14px; }
-.dead-chip { font-size: 10px; padding: 3px 8px; border: 1px solid rgba(125,170,255,0.12); color: var(--ink-faint); }
+.dead-chip { font-size: 10px; padding: 3px 8px; border: 1px solid rgba(var(--line-rgb), 0.12); color: var(--ink-faint); }
 .loop-chip { font-size: 10px; padding: 3px 8px; border: 1px solid rgba(255,180,84,0.35); color: var(--c-wait); }
 .credit-group.dead .panel-title span { color: var(--ink-faint); }
 .credit-note { font-size: 9px; padding: 0 14px 4px; }
@@ -859,7 +915,7 @@ textarea, input { cursor: text; }
 .ops-group { padding-bottom: 8px; }
 .ops-group-body { display: flex; flex-direction: column; }
 
-.ops-node { border-bottom: 1px solid rgba(125, 170, 255, 0.07); }
+.ops-node { border-bottom: 1px solid rgba(var(--line-rgb), 0.07); }
 .ops-node:last-child { border-bottom: none; }
 
 .ops-row {
@@ -931,7 +987,7 @@ textarea, input { cursor: text; }
 /* nested fan-out (workflow → phase → spawn) */
 .ops-children {
   margin-left: 16px;
-  border-left: 1px solid rgba(125, 170, 255, 0.1);
+  border-left: 1px solid rgba(var(--line-rgb), 0.1);
 }
 .ops-children .ops-row { padding-left: 14px; }
 .ops-children .ops-node { border-bottom: none; }
@@ -954,9 +1010,9 @@ textarea, input { cursor: text; }
 }
 .run-row {
   display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
-  background: none; border: none; border-bottom: 1px solid rgba(125, 170, 255, 0.07); padding: 9px 14px;
+  background: none; border: none; border-bottom: 1px solid rgba(var(--line-rgb), 0.07); padding: 9px 14px;
 }
-.run-row:hover { background: rgba(63, 224, 255, 0.06); }
+.run-row:hover { background: rgba(var(--accent-rgb), 0.06); }
 .run-row .run-name { font-family: var(--font-display); font-weight: 600; font-size: 12px; color: var(--ink); }
 .run-row .run-meta { font-size: 9px; letter-spacing: 0.08em; color: var(--ink-faint); }
 .run-empty { padding: 12px 14px; font-size: 11px; }
@@ -992,7 +1048,7 @@ textarea, input { cursor: text; }
   margin-bottom: 6px;
   border-radius: 6px;
   border-left: 3px solid var(--c-paused);
-  background: rgba(125, 170, 255, 0.04);
+  background: rgba(var(--line-rgb), 0.04);
 }
 .rec-row.sev-high { border-left-color: var(--c-err); background: rgba(255, 82, 119, 0.06); }
 .rec-row.sev-medium { border-left-color: var(--c-wait); background: rgba(255, 180, 84, 0.05); }
@@ -1052,7 +1108,7 @@ textarea, input { cursor: text; }
   white-space: nowrap;
   user-select: none;
 }
-.tab:hover { background: rgba(125, 170, 255, 0.06); color: var(--ink); }
+.tab:hover { background: rgba(var(--line-rgb), 0.06); color: var(--ink); }
 .tab.active { background: var(--surface-1); border-color: var(--line); color: var(--ink); }
 .tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-small); }
@@ -1167,4 +1223,54 @@ textarea, input { cursor: text; }
   inset: auto;
   padding: 12px 14px;
   text-align: left;
+}
+
+/* ---- v2: settings menu (TopBar gear → popover) ------------------ */
+.settings-menu { position: relative; display: inline-flex; }
+.settings-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 200px;
+  padding: 12px 14px;
+  box-shadow: var(--elev);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.settings-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-small);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* segmented control — the light/dark toggle */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg button {
+  background: var(--surface-3);
+  border: none;
+  color: var(--ink-dim);
+  font-family: var(--font-display);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--track-ui);
+  text-transform: uppercase;
+  padding: 5px 12px;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { color: var(--ink); }
+.seg button.active {
+  background: var(--c-run);
+  color: var(--surface-1);
+  font-weight: 600;
 }

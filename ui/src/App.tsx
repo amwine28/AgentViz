@@ -11,6 +11,8 @@ import { MessageThread } from "./components/MessageThread";
 import { TopBar } from "./components/TopBar";
 import { TabStrip } from "./components/TabStrip";
 import { ViewSwitch } from "./components/ViewSwitch";
+import { SettingsMenu } from "./components/SettingsMenu";
+import { loadTheme, applyTheme, type Theme } from "./theme/theme";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { RunPicker } from "./components/RunPicker";
@@ -37,7 +39,11 @@ export function App() {
   const [showRuns, setShowRuns] = useState(false);
   const [shell, setShell] = useState<ShellMap>({});
   const [analytics, setAnalytics] = useState<AnalyticsMap>({});
+  const [theme, setTheme] = useState<Theme>(loadTheme);
   const sendRef = useRef<((cmd: object) => string) | null>(null);
+
+  // Reflect the chosen theme onto <html data-theme> + persist it.
+  useEffect(() => { applyTheme(theme); }, [theme]);
 
   // Per-tab view + Hyperdrive (each tab remembers its own).
   const ui = getShell(shell, state.activeId);
@@ -116,7 +122,9 @@ export function App() {
         onOpenRuns={() => setShowRuns(true)}
         onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
         onStopAll={() => sendCommand({ kind: "agent_stop", agent_id: null })}
-      />
+      >
+        <SettingsMenu theme={theme} onSetTheme={setTheme} />
+      </TopBar>
 
       <div className="stage">
         <ViewSwitch
@@ -134,6 +142,7 @@ export function App() {
             operations={world.operations}
             selectedNodeId={world.selectedNodeId}
             funMode={funMode}
+            theme={theme}
             onSelectNode={selectNode}
           />
         ) : view === "flow" ? (

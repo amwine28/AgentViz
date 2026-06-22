@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 interface Props {
   connected: boolean;
   sessionName: string;
@@ -9,11 +11,12 @@ interface Props {
   onOpenRuns: () => void;
   onPauseAll: () => void;
   onStopAll: () => void;
+  children?: ReactNode; // trailing slot (settings menu, etc.)
 }
 
 export function TopBar({
   connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
-  dryRun, onOpenRuns, onPauseAll, onStopAll,
+  dryRun, onOpenRuns, onPauseAll, onStopAll, children,
 }: Props) {
   return (
     <div className="topbar">
@@ -39,6 +42,7 @@ export function TopBar({
       <button className="hud-btn" onClick={onOpenRuns} title="Browse & replay recorded runs">⟲ Runs</button>
       <button className="hud-btn" onClick={onPauseAll} title="Pause every agent in the swarm">Pause all</button>
       <button className="hud-btn danger" onClick={onStopAll} title="Stop the entire swarm">Stop all</button>
+      {children}
     </div>
   );
 }

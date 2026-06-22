@@ -3,6 +3,7 @@ import ForceGraph3D, { ForceGraph3DInstance } from "3d-force-graph";
 import * as THREE from "three";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import type { AgentNode, MessageEdge, OperationState } from "../types";
+import type { Theme } from "../theme/theme";
 import { operationBadge } from "../operations";
 
 interface Props {
@@ -11,8 +12,14 @@ interface Props {
   operations: Map<string, OperationState>;
   selectedNodeId: string | null;
   funMode: boolean;
+  theme: Theme;
   onSelectNode: (id: string | null) => void;
 }
+
+// The 3D field follows the theme: a clean paper canvas in light (no resting
+// glow — Hyperdrive is the opt-in spectacle), the deep void in dark.
+const FIELD_BG: Record<Theme, string> = { light: "#e9e5db", dark: "#04060d" };
+const RESTING_BLOOM: Record<Theme, number> = { light: 0.05, dark: 0.3 };
 
 const STATUS_COLOR: Record<string, string> = {
   running: "#3fe0ff",
@@ -161,7 +168,7 @@ function makeStarfield(): THREE.Points {
   return new THREE.Points(geo, mat);
 }
 
-export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funMode, onSelectNode }: Props) {
+export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funMode, theme, onSelectNode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<VizNode, VizLink> | null>(null);
   const dataRef = useRef<{ nodes: VizNode[]; links: VizLink[] }>({ nodes: [], links: [] });
@@ -179,6 +186,8 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
   const operationsRef = useRef(operations);
   operationsRef.current = operations;
   const funRef = useRef(funMode);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   /* ---- one-time scene construction ---- */
   useEffect(() => {
@@ -190,7 +199,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       new (element: HTMLElement, config?: { controlType?: string }): ForceGraph3DInstance<VizNode, VizLink>;
     };
     const graph = new TypedForceGraph3D(el, { controlType: "orbit" })
-      .backgroundColor("#04060d")
+      .backgroundColor(FIELD_BG[themeRef.current])
       .showNavInfo(false)
       .nodeThreeObject((n: VizNode) => {
         const color = new THREE.Color(STATUS_COLOR[n.status] ?? "#8b9bb4");
@@ -255,12 +264,13 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     graph.cameraPosition({ x: 0, y: 60, z: 340 });
 
     const bloom = new UnrealBloomPass(
-      new THREE.Vector2(el.clientWidth, el.clientHeight), 0.3, 0.25, 0.35
+      new THREE.Vector2(el.clientWidth, el.clientHeight), RESTING_BLOOM[themeRef.current], 0.25, 0.35
     );
     bloomRef.current = bloom;
     graph.postProcessingComposer().addPass(bloom);
 
     const starfield = makeStarfield();
+    starfield.visible = themeRef.current === "dark"; // starfield reads as noise on paper
     starfieldRef.current = starfield;
     graph.scene().add(starfield);
 
@@ -382,7 +392,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         .linkDirectionalParticleWidth(3.4)
         .linkDirectionalParticleColor(() => NEON[Math.floor(Math.random() * NEON.length)]);
     } else {
-      if (bloom) { bloom.radius = 0.25; bloom.strength = 0.3; }
+      if (bloom) { bloom.radius = 0.25; bloom.strength = RESTING_BLOOM[themeRef.current]; }
       if (controls) { controls.autoRotateSpeed = 0.45; }
       graph.linkOpacity(0.35)
         .linkDirectionalParticles(0)
@@ -399,6 +409,17 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       }
     }
   }, [funMode]);
+
+  /* ---- theme: repaint the field, drop the resting glow + starfield in light ---- */
+  useEffect(() => {
+    themeRef.current = theme;
+    const graph = graphRef.current;
+    if (!graph) return;
+    graph.backgroundColor(FIELD_BG[theme]);
+    if (starfieldRef.current) starfieldRef.current.visible = theme === "dark";
+    // Hyperdrive owns the bloom while it's on; otherwise track the theme's resting glow.
+    if (bloomRef.current && !funRef.current) bloomRef.current.strength = RESTING_BLOOM[theme];
+  }, [theme]);
 
   /* ---- data sync: preserve node identity so layout stays stable ---- */
   useEffect(() => {
