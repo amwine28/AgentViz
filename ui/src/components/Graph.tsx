@@ -84,10 +84,10 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     defs.innerHTML = `
       <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L6,3 z" fill="#33415c"/>
+        <path class="g2-arrow" d="M0,0 L0,6 L6,3 z"/>
       </marker>
       <marker id="arrow-msg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L6,3 z" fill="#3fe0ff"/>
+        <path class="g2-arrow-msg" d="M0,0 L0,6 L6,3 z"/>
       </marker>
       <style>
         @keyframes dash { to { stroke-dashoffset: -16; } }
@@ -102,17 +102,17 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
     const edgeEls: SVGLineElement[] = links.map((link) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       if (link.type === "spawn") {
-        line.setAttribute("stroke", "#33415c");
+        // stroke color comes from CSS (.g2-edge-spawn) so it follows the theme
+        line.setAttribute("class", "g2-edge-spawn");
         line.setAttribute("stroke-width", "1.2");
         line.setAttribute("marker-end", "url(#arrow)");
       } else {
         // edge weight = message volume; thickness makes the busy paths obvious
-        line.setAttribute("stroke", "#3fe0ff");
         line.setAttribute("stroke-opacity", "0.7");
         line.setAttribute("stroke-width", String(Math.min(1 + Math.sqrt(link.weight), 6)));
         line.setAttribute("stroke-dasharray", "5 4");
         line.setAttribute("marker-end", "url(#arrow-msg)");
-        line.setAttribute("class", "msg-edge");
+        line.setAttribute("class", "msg-edge g2-edge-msg");
         line.style.cursor = "pointer";
         const src = typeof link.source === "string" ? link.source : (link.source as SimNode).id;
         const tgt = typeof link.target === "string" ? link.target : (link.target as SimNode).id;
@@ -134,7 +134,9 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("r", String(r));
-      circle.setAttribute("fill", "#0a1020");
+      // fill comes from CSS (.g2-node) so nodes are light cards on the light
+      // theme, dark on dark; the status STROKE stays the shared phosphor hue.
+      circle.setAttribute("class", "g2-node");
       circle.setAttribute("stroke", color);
       circle.setAttribute("stroke-width", selectedNodeId === node.id ? "3" : "1.5");
       circle.style.cursor = "pointer";
@@ -147,9 +149,9 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("text-anchor", "middle");
       label.setAttribute("dy", String(r + 14));
-      label.setAttribute("fill", "#8fa3c4");
+      // fill + font from CSS (.g2-label) so labels stay readable on either theme
+      label.setAttribute("class", "g2-label");
       label.setAttribute("font-size", "10");
-      label.setAttribute("font-family", "IBM Plex Mono, monospace");
       label.setAttribute("pointer-events", "none");
       label.textContent = agent.name;
       g.appendChild(label);

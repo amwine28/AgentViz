@@ -1274,3 +1274,16 @@ textarea, input { cursor: text; }
   color: var(--surface-1);
   font-weight: 600;
 }
+
+/* ---- v2: 2D graph (D3) — theme-driven so it reads on light AND dark ------
+   The Graph component builds raw SVG and only sets the per-node status STROKE
+   inline (the shared phosphor hue). Everything else is themed here: nodes are
+   solid surface chips, labels use readable ink, edges/arrows follow the line +
+   message tokens. Previously these were hardcoded dark values, invisible on
+   the light theme. */
+.g2-node { fill: var(--surface-1); }
+.g2-label { fill: var(--ink-dim); font-family: var(--font-mono); }
+.g2-edge-spawn { stroke: var(--line-bright); }
+.g2-edge-msg { stroke: var(--c-msg); }
+.g2-arrow { fill: var(--line-bright); }
+.g2-arrow-msg { fill: var(--c-msg); }

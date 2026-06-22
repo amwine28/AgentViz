@@ -45,14 +45,17 @@ export function App() {
   // Reflect the chosen theme onto <html data-theme> + persist it.
   useEffect(() => { applyTheme(theme); }, [theme]);
 
-  // Per-tab view + Hyperdrive (each tab remembers its own).
-  const ui = getShell(shell, state.activeId);
+  // Per-tab view + Hyperdrive (each tab remembers its own). Read and write must
+  // use the SAME key — including the "_pending" fallback when there's no active
+  // session yet — or the view switch looks stuck (writes land on a key the read
+  // ignores). getShell(map, null) returns the default, so never read with null.
+  const shellKey = state.activeId ?? "_pending";
+  const ui = getShell(shell, shellKey);
   const view = ui.view;
   const funMode = ui.funMode;
-  const shellKey = state.activeId ?? "_pending";
   const setView = (v: ViewMode) => setShell((m) => setShellView(m, shellKey, v));
   const toggleFun = () => setShell((m) => setShellFun(m, shellKey, !getShell(m, shellKey).funMode));
-  const analyticsUi = getAnalytics(analytics, state.activeId);
+  const analyticsUi = getAnalytics(analytics, shellKey);
 
   const tabs = sessionTabs(state);
 
@@ -170,7 +173,7 @@ export function App() {
             <div className="big">{state.connected ? "AWAITING SIGNAL" : "RELAY OFFLINE"}</div>
             <div className="hint">
               {state.connected
-                ? <>run <code>python3 examples/demo_swarm.py</code> — or wrap your agents with the SDK</>
+                ? <>run <code>agentviz</code> in any terminal to add it as a tab — or wrap your agents with the SDK</>
                 : <>can't reach the relay on port {RELAY_PORT} — start it, then this reconnects automatically</>}
             </div>
           </div>
