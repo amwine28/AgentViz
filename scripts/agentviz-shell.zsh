@@ -1,25 +1,26 @@
-# AgentViz shell hook (zsh) — turn every terminal into a live AgentViz tab.
+# AgentViz shell hook (zsh) — opt a terminal IN to AgentViz, on demand.
 #
 # Install once:  bash ~/dev/AgentViz/scripts/agentviz.sh install
 # (that appends a single `source` line for this file to your ~/.zshrc).
 #
-# From then on, every new terminal:
-#   • registers its own tab (named after the working directory), and
-#   • streams its REAL activity — a live Claude Code session if you run `claude`
-#     here, otherwise the real commands you type.
+# Installing does NOT make every terminal show up. Sourcing this only *defines*
+# the `agentviz` command and arms inert hooks. A terminal appears as a tab ONLY
+# when you run, in that terminal:
 #
-# Fail-open by design: every emit is backgrounded with a 1s cap and silenced, so
-# it NEVER slows your prompt, and if the AgentViz relay isn't running nothing
-# happens. GROUNDED: only real commands/sessions are shown — nothing invented.
+#     agentviz            # opt THIS terminal in + open the AgentViz window
+#     agentviz off        # stop streaming this terminal
+#     agentviz status     # is this terminal streaming?
+#
+# Once opted in, the terminal streams its REAL activity — a live Claude Code
+# session if you run `claude` here, otherwise the real commands you type.
+# Terminals where you never run `agentviz` stream NOTHING. Every emit is
+# backgrounded with a 1s cap and silenced, so it never slows your prompt, and
+# does nothing if the relay isn't up. GROUNDED: only real activity, never invented.
 
 _AGENTVIZ_REPO="${AGENTVIZ_HOME:-$HOME/dev/AgentViz}"
 _AGENTVIZ_ATTACH="$_AGENTVIZ_REPO/scripts/agentviz-attach.sh"
+_AGENTVIZ_LAUNCH="$_AGENTVIZ_REPO/scripts/agentviz.sh"
 [ -x "$_AGENTVIZ_ATTACH" ] || return 0
-
-# A stable identity + tab for THIS terminal, for its whole lifetime.
-if [ -z "$AGENTVIZ_SESSION" ]; then
-  export AGENTVIZ_SESSION="term-${HOST%%.*}-$$-${RANDOM}"
-fi
 
 _agentviz_port() {
   python3 -c "import json;print(json.load(open('$HOME/.agentviz/relay.json'))['port'])" 2>/dev/null
@@ -32,9 +33,7 @@ _agentviz_emit() {
       -H 'Content-Type: application/json' -d "$1" >/dev/null 2>&1 & ) 2>/dev/null
 }
 
-# Minimal JSON string escaping: backslash, double-quote, and drop newlines/tabs.
-# A command we can't cleanly escape just yields a dropped event (the relay
-# ignores malformed JSON) — never fake data, never a broken prompt.
+# Minimal JSON string escaping: backslash, double-quote, drop newlines/tabs.
 _agentviz_esc() {
   local s="$1"
   s="${s//\\/\\\\}"
@@ -44,16 +43,37 @@ _agentviz_esc() {
   print -r -- "$s"
 }
 
-# One-time registration for this shell (tab + a "shell" agent to hang commands on).
-if [ -z "$AGENTVIZ_ATTACHED" ]; then
-  export AGENTVIZ_ATTACHED=1
-  ( "$_AGENTVIZ_ATTACH" attach "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
-fi
+# The command you run to opt THIS terminal in (or off). Nothing streams until
+# this is called — that's the whole point: every tab is user-invoked.
+agentviz() {
+  case "$1" in
+    off)
+      if [ -n "$AGENTVIZ_ON" ]; then
+        _agentviz_emit "{\"kind\":\"agent_complete\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"exit_status\":\"ok\",\"summary\":\"detached\"}"
+      fi
+      unset AGENTVIZ_ON AGENTVIZ_CC AGENTVIZ_CALL
+      echo "agentviz: this terminal is no longer streaming."
+      return 0 ;;
+    status)
+      echo "agentviz: ${AGENTVIZ_ON:+streaming}${AGENTVIZ_ON:-off} (session ${AGENTVIZ_SESSION:-none})"
+      return 0 ;;
+  esac
 
+  # Opt in: stable per-terminal id, register the tab + a "shell" agent, and open
+  # the AgentViz window (bootstrapping the relay/UI if needed).
+  [ -z "$AGENTVIZ_SESSION" ] && export AGENTVIZ_SESSION="term-${HOST%%.*}-$$-${RANDOM}"
+  export AGENTVIZ_ON=1
+  ( "$_AGENTVIZ_ATTACH" attach "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
+  ( "$_AGENTVIZ_LAUNCH" >/dev/null 2>&1 & ) 2>/dev/null   # ensures relay + opens/focuses the window
+  echo "agentviz: streaming this terminal → it now appears as a tab in the AgentViz window."
+}
+
+# Hooks below are INERT unless this terminal opted in (AGENTVIZ_ON set).
 _agentviz_preexec() {
+  [ -n "$AGENTVIZ_ON" ] || return 0
   local cmd="$1"
-  # Running `claude` here? Start live-tailing that Claude Code session into this
-  # terminal's tab (its agent activity replaces the plain command stream).
+  # Running `claude` in an opted-in terminal → live-tail that Claude Code session
+  # into this terminal's tab (its agent activity replaces the plain command stream).
   if [[ "$cmd" == claude(|" "*) ]] && [ -z "$AGENTVIZ_CC" ]; then
     export AGENTVIZ_CC=1
     ( "$_AGENTVIZ_ATTACH" tail-cc "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
@@ -66,12 +86,14 @@ _agentviz_preexec() {
 
 _agentviz_precmd() {
   local ec=$?
+  [ -n "$AGENTVIZ_ON" ] || return 0
   [ -z "$AGENTVIZ_CALL" ] && return 0
   _agentviz_emit "{\"kind\":\"tool_result\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"call_id\":\"$AGENTVIZ_CALL\",\"result\":$ec,\"duration_ms\":0}"
   unset AGENTVIZ_CALL
 }
 
 _agentviz_exit() {
+  [ -n "$AGENTVIZ_ON" ] || return 0
   _agentviz_emit "{\"kind\":\"agent_complete\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"exit_status\":\"ok\",\"summary\":\"terminal closed\"}"
 }
 

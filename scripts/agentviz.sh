@@ -2,7 +2,7 @@
 # AgentViz launcher — relay up, browser open, optional demo swarm or session replay.
 # Usage: agentviz.sh [--demo] [--rebuild] [--no-browser]
 #                    [--replay <path-to-claude-code-session.jsonl> [--outcome=1]]
-#        agentviz.sh install     # add the shell hook to ~/.zshrc (every terminal → a tab)
+#        agentviz.sh install     # define the `agentviz` command in ~/.zshrc (opt-in per terminal)
 #        agentviz.sh uninstall   # remove the shell hook
 #        agentviz.sh attach ...  # (internal) register the current terminal
 set -e
@@ -29,7 +29,9 @@ case "${1:-}" in
       echo "$AGENTVIZ_MARK_END"
     } >> "$ZSHRC"
     echo "[agentviz] installed the shell hook in $ZSHRC."
-    echo "[agentviz] open a new terminal (or: source \"$REPO/scripts/agentviz-shell.zsh\") — each one becomes a tab."
+    echo "[agentviz] open a new terminal (or: source \"$REPO/scripts/agentviz-shell.zsh\")."
+    echo "[agentviz] then, in ANY terminal you want to watch, run:  agentviz"
+    echo "[agentviz] only terminals where you run that command appear — nothing is auto-added."
     exit 0
     ;;
   uninstall)
