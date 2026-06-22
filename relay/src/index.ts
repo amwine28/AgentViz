@@ -27,6 +27,8 @@ const MIME: Record<string, string> = {
   ".map": "application/json",
 };
 
+let relayApi: { ingest: (event: Record<string, unknown>) => void };
+
 const server = http.createServer((req, res) => {
   // Strip query string and decode
   const rawPath = (req.url ?? "/").split("?")[0];
@@ -36,6 +38,29 @@ const server = http.createServer((req, res) => {
   } catch {
     res.writeHead(400);
     res.end("Bad Request");
+    return;
+  }
+
+  // Event ingestion over HTTP (the shell hook posts here — cheaper than a WS
+  // per command). Accepts a single event object or an array of events.
+  if (urlPath === "/ingest" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) req.destroy();   // cap: a command line is tiny
+    });
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(body);
+        const events = Array.isArray(parsed) ? parsed : [parsed];
+        for (const e of events) if (e && typeof e === "object") relayApi.ingest(e);
+        res.writeHead(204);
+        res.end();
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid JSON event" }));
+      }
+    });
     return;
   }
 
@@ -90,7 +115,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-createRelay(server, new RunRecorder(RUNS_DIR));
+relayApi = createRelay(server, new RunRecorder(RUNS_DIR));
 
 function writePortFile(port: number): void {
   try {

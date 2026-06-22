@@ -2,10 +2,54 @@
 # AgentViz launcher — relay up, browser open, optional demo swarm or session replay.
 # Usage: agentviz.sh [--demo] [--rebuild] [--no-browser]
 #                    [--replay <path-to-claude-code-session.jsonl> [--outcome=1]]
+#        agentviz.sh install     # add the shell hook to ~/.zshrc (every terminal → a tab)
+#        agentviz.sh uninstall   # remove the shell hook
+#        agentviz.sh attach ...  # (internal) register the current terminal
 set -e
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT_FILE="$HOME/.agentviz/relay.json"
+
+# --- subcommands (shell integration) ---------------------------------
+# These let the user opt in ONCE so every future terminal becomes a tab.
+AGENTVIZ_MARK_BEGIN="# >>> agentviz shell hook >>>"
+AGENTVIZ_MARK_END="# <<< agentviz shell hook <<<"
+
+case "${1:-}" in
+  install)
+    ZSHRC="$HOME/.zshrc"
+    if [ -f "$ZSHRC" ] && grep -qF "$AGENTVIZ_MARK_BEGIN" "$ZSHRC"; then
+      echo "[agentviz] shell hook already installed in $ZSHRC"
+      exit 0
+    fi
+    {
+      echo ""
+      echo "$AGENTVIZ_MARK_BEGIN"
+      echo "[ -f \"$REPO/scripts/agentviz-shell.zsh\" ] && source \"$REPO/scripts/agentviz-shell.zsh\""
+      echo "$AGENTVIZ_MARK_END"
+    } >> "$ZSHRC"
+    echo "[agentviz] installed the shell hook in $ZSHRC."
+    echo "[agentviz] open a new terminal (or: source \"$REPO/scripts/agentviz-shell.zsh\") — each one becomes a tab."
+    exit 0
+    ;;
+  uninstall)
+    ZSHRC="$HOME/.zshrc"
+    if [ -f "$ZSHRC" ] && grep -qF "$AGENTVIZ_MARK_BEGIN" "$ZSHRC"; then
+      # delete the marked block, in place (portable BSD/GNU sed via a temp file)
+      sed "/$AGENTVIZ_MARK_BEGIN/,/$AGENTVIZ_MARK_END/d" "$ZSHRC" > "$ZSHRC.agentviz.tmp" \
+        && mv "$ZSHRC.agentviz.tmp" "$ZSHRC"
+      echo "[agentviz] removed the shell hook from $ZSHRC. Open a new terminal to finish."
+    else
+      echo "[agentviz] no shell hook found in $ZSHRC"
+    fi
+    exit 0
+    ;;
+  attach)
+    shift
+    exec bash "$REPO/scripts/agentviz-attach.sh" attach "$@"
+    ;;
+esac
+
 DEMO=0
 REBUILD=0
 NO_BROWSER=0

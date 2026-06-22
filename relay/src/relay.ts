@@ -31,27 +31,32 @@ export function createRelay(portOrServer: number | HttpServer, recorder?: RunRec
     return req.url === "/sdk";
   }
 
+  // One ingestion path for every producer — a WS /sdk client OR an HTTP
+  // POST /ingest (the shell hook). `ws` is the owning SDK socket when the
+  // event arrives over a socket, so browser commands can route back to it;
+  // HTTP-ingested events have no owning socket (fire-and-forget).
+  function ingest(event: Record<string, unknown> & { kind?: string; name?: string }, ws?: WebSocket): void {
+    const sid = sessionIdOf(event);
+    const isStart = event && event.kind === "session_start";
+    const { state } = registry.ensure(sid, isStart ? (event.name as string | undefined) : undefined);
+    if (ws) state.sdkSockets.add(ws);
+    // session_start clears ONLY this session's buffer — never the others.
+    if (isStart) state.buffer.clear();
+    recorder?.record(event);   // durable per-run log (keyed run_id ?? session_id)
+    state.buffer.push(event);
+    for (const browser of browserClients) {
+      if (browser.readyState === WebSocket.OPEN) {
+        try { browser.send(JSON.stringify(event)); } catch { /* ignore closed socket */ }
+      }
+    }
+  }
+
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     if (isSdkPath(req)) {
       sdkClients.add(ws);
 
       ws.on("message", (data) => {
-        try {
-          const event = JSON.parse(data.toString());
-          const sid = sessionIdOf(event);
-          const isStart = event && event.kind === "session_start";
-          const { state } = registry.ensure(sid, isStart ? (event.name as string | undefined) : undefined);
-          state.sdkSockets.add(ws);
-          // session_start clears ONLY this session's buffer — never the others.
-          if (isStart) state.buffer.clear();
-          recorder?.record(event);   // durable per-run log (keyed run_id ?? session_id)
-          state.buffer.push(event);
-          for (const browser of browserClients) {
-            if (browser.readyState === WebSocket.OPEN) {
-              try { browser.send(JSON.stringify(event)); } catch { /* ignore closed socket */ }
-            }
-          }
-        } catch { /* ignore malformed */ }
+        try { ingest(JSON.parse(data.toString()), ws); } catch { /* ignore malformed */ }
       });
 
       const dropSdk = () => { sdkClients.delete(ws); registry.detachSocket(ws); };
@@ -104,5 +109,7 @@ export function createRelay(portOrServer: number | HttpServer, recorder?: RunRec
       return addr && typeof addr === "object" ? addr.port : 0;
     },
     ready,
+    // Exposed so the HTTP server can feed POST /ingest through the same path.
+    ingest: (event: Record<string, unknown>) => ingest(event),
   };
 }

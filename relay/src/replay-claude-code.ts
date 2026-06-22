@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   }
   const outcomeArg = args.find((a) => a.startsWith("--outcome="));
   const session = loadClaudeCodeSession(path.resolve(mainPath));
-  const events = claudeCodeToEvents(session) as Array<Record<string, unknown>>;
+  const events = claudeCodeToEvents(session) as unknown as Array<Record<string, unknown>>;
 
   // Operator-supplied terminal outcome (external by design — never inferred).
   if (outcomeArg) {
@@ -100,4 +100,8 @@ async function main(): Promise<void> {
   console.log(`[replay] done — open http://localhost:${port} and press V to the CREDIT view.`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Run as a CLI only when invoked directly — importing this module (e.g. for
+// loadClaudeCodeSession) must not kick off a replay.
+if (require.main === module) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

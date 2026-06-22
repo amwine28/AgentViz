@@ -7,6 +7,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "replay": "ts-node --transpile-only src/replay-claude-code.ts",
+    "tail": "ts-node --transpile-only src/tail-claude-code.ts",
     "otel-receiver": "ts-node --transpile-only src/otel-receiver.ts",
     "test": "jest"
   },
