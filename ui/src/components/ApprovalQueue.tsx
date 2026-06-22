@@ -19,18 +19,25 @@ interface PendingCall {
 export function ApprovalQueue({ agents, acks, onCommand }: Props) {
   // local map of call_id -> cmd_id for ack display
   const [sent, setSent] = useState<Record<string, string>>({});
+  // calls the user manually cleared (the escape hatch when no live agent answers)
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [, forceTick] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const nowS = Date.now() / 1000;
   const pending: PendingCall[] = [];
   for (const agent of Object.values(agents)) {
     for (const tc of agent.tool_calls) {
-      if (tc.pending) {
-        pending.push({
-          agent, call_id: tc.call_id, name: tc.name, args: tc.args,
-          requested_at: tc.requested_at, timeout_s: tc.timeout_s,
-        });
-      }
+      if (!tc.pending) continue;
+      if (dismissed.has(tc.call_id)) continue;
+      // Auto-clear calls whose approval window has demonstrably closed: a replayed
+      // or passively-observed run has no live SDK behind it, so no result/denial
+      // will ever arrive — once the deadline has passed, stop showing the prompt.
+      if (tc.requested_at != null && nowS - tc.requested_at > (tc.timeout_s ?? 30) + 2) continue;
+      pending.push({
+        agent, call_id: tc.call_id, name: tc.name, args: tc.args,
+        requested_at: tc.requested_at, timeout_s: tc.timeout_s,
+      });
     }
   }
 
@@ -48,14 +55,14 @@ export function ApprovalQueue({ agents, acks, onCommand }: Props) {
     };
   }, [pending.length]);
 
+  const dismiss = (call_id: string) => setDismissed((s) => new Set(s).add(call_id));
+
   if (pending.length === 0) return null;
 
   const act = (kind: "tool_approve" | "tool_deny", pc: PendingCall) => {
     const cmdId = onCommand({ kind, agent_id: pc.agent.id, call_id: pc.call_id });
     setSent((s) => ({ ...s, [pc.call_id]: cmdId }));
   };
-
-  const nowS = Date.now() / 1000;
 
   return (
     <div className="approval-queue panel">
@@ -72,6 +79,7 @@ export function ApprovalQueue({ agents, acks, onCommand }: Props) {
           const ack = cmdId ? acks[cmdId] : undefined;
           return (
             <div key={pc.call_id} className="approval-card">
+              <button className="approval-dismiss" title="Dismiss" onClick={() => dismiss(pc.call_id)}>×</button>
               <div className="who">{pc.agent.name}</div>
               <div className="what">{pc.name}()</div>
               <div className="args">{JSON.stringify(pc.args, null, 0)}</div>

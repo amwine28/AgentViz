@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
 import * as d3 from "d3-force";
+import { select } from "d3-selection";
+import { zoom as d3zoom, zoomIdentity, type ZoomTransform, type D3ZoomEvent } from "d3-zoom";
+import { drag as d3drag, type D3DragEvent } from "d3-drag";
 import type { AgentNode, MessageEdge, OperationState } from "../types";
 import { operationBadge } from "../operations";
 
@@ -10,7 +13,6 @@ interface Props {
   selectedNodeId: string | null;
   onSelectNode: (id: string) => void;
   onSelectEdge: (key: string) => void;
-  onCommand: (cmd: object) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -21,6 +23,9 @@ const STATUS_COLORS: Record<string, string> = {
   paused: "#8b9bb4",
 };
 const ROOT_COLOR = "#7daaff";
+// How many labels to show by default before decluttering — the rest reveal on
+// hover / selection (73 always-on labels = the unreadable smear we're killing).
+const MAX_LABELS = 14;
 
 interface SimNode extends d3.SimulationNodeDatum { id: string }
 interface SimLink extends d3.SimulationLinkDatum<SimNode> { type: "spawn" | "message"; weight: number }
@@ -32,6 +37,10 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
   const posMapRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   // Maps agent_id → circle element for fast selection highlighting
   const circleMapRef = useRef<Map<string, SVGCircleElement>>(new Map());
+  // Persisted zoom/pan transform — survives the SVG rebuild on data change.
+  const zoomRef = useRef<ZoomTransform>(zoomIdentity);
+  // The node whose label is force-shown via hover (in addition to the default set).
+  const hoverRef = useRef<string | null>(null);
 
   // Effect 1: rebuild simulation when graph structure changes (NOT when selectedNodeId changes)
   useEffect(() => {
@@ -68,13 +77,35 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
       activity.set(e.from_agent_id, (activity.get(e.from_agent_id) ?? 0) + e.messages.length);
       activity.set(e.to_agent_id, (activity.get(e.to_agent_id) ?? 0) + e.messages.length);
     }
+    const isRoot = (id: string) => !agents[id]?.parent_id;
+    const radiusOf = (id: string) =>
+      Math.min((isRoot(id) ? 14 : 10) + 2 * Math.sqrt(activity.get(id) ?? 0), 30);
+
+    // Default-visible labels: the selected node, any node with a live op, and the
+    // top-N by activity. Everything else is revealed on hover. This is what stops
+    // a 73-node star from rendering 73 overlapping labels.
+    const topByActivity = [...nodes]
+      .sort((a, b) => (activity.get(b.id) ?? 0) - (activity.get(a.id) ?? 0))
+      .slice(0, MAX_LABELS)
+      .map((n) => n.id);
+    const defaultLabels = new Set<string>(topByActivity);
+    for (const n of nodes) {
+      if (isRoot(n.id)) defaultLabels.add(n.id);
+      if (operationBadge(n.id, operations)) defaultLabels.add(n.id);
+    }
 
     if (simRef.current) simRef.current.stop();
 
+    // Layout: link + charge + center, PLUS a collision force (so circles and
+    // their label band don't overlap) and a gentle radial ring for non-root
+    // nodes (turns a 1→N star from a clumped hairball into a readable ring).
+    const ring = Math.min(W, H) * 0.34;
     const sim = d3.forceSimulation<SimNode>(nodes)
-      .force("link", d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(120))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(W / 2, H / 2));
+      .force("link", d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(110).strength(0.35))
+      .force("charge", d3.forceManyBody().strength(-220))
+      .force("center", d3.forceCenter(W / 2, H / 2))
+      .force("collide", d3.forceCollide<SimNode>().radius((d) => radiusOf(d.id) + 22).iterations(2))
+      .force("radial", d3.forceRadial<SimNode>((d) => (isRoot(d.id) ? 0 : ring), W / 2, H / 2).strength((d) => (isRoot(d.id) ? 0 : 0.22)));
 
     simRef.current = sim;
 
@@ -96,18 +127,19 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
     `;
     svg.appendChild(defs);
 
+    // Everything pannable/zoomable lives in this group; the zoom transform is
+    // applied to its `transform` attribute.
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("transform", zoomRef.current.toString());
     svg.appendChild(g);
 
     const edgeEls: SVGLineElement[] = links.map((link) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       if (link.type === "spawn") {
-        // stroke color comes from CSS (.g2-edge-spawn) so it follows the theme
         line.setAttribute("class", "g2-edge-spawn");
         line.setAttribute("stroke-width", "1.2");
         line.setAttribute("marker-end", "url(#arrow)");
       } else {
-        // edge weight = message volume; thickness makes the busy paths obvious
         line.setAttribute("stroke-opacity", "0.7");
         line.setAttribute("stroke-width", String(Math.min(1 + Math.sqrt(link.weight), 6)));
         line.setAttribute("stroke-dasharray", "5 4");
@@ -122,39 +154,39 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
       return line;
     });
 
-    // Rebuild circleMap for selection highlighting
     circleMapRef.current.clear();
 
     const nodeEls = nodes.map((node) => {
       const agent = agents[node.id];
-      const isRoot = !agent.parent_id;
-      const color = isRoot ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? "#8b9bb4");
-      // radius encodes activity (tool calls + messages), root gets a floor bump
-      const r = Math.min((isRoot ? 14 : 10) + 2 * Math.sqrt(activity.get(node.id) ?? 0), 30);
+      const root = isRoot(node.id);
+      const color = root ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? "#8b9bb4");
+      const r = radiusOf(node.id);
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("r", String(r));
-      // fill comes from CSS (.g2-node) so nodes are light cards on the light
-      // theme, dark on dark; the status STROKE stays the shared phosphor hue.
       circle.setAttribute("class", "g2-node");
       circle.setAttribute("stroke", color);
       circle.setAttribute("stroke-width", selectedNodeId === node.id ? "3" : "1.5");
       circle.style.cursor = "pointer";
-      circle.addEventListener("click", () => onSelectNode(node.id));
       g.appendChild(circle);
-
-      // Register for fast highlight updates
       circleMapRef.current.set(node.id, circle);
 
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("text-anchor", "middle");
       label.setAttribute("dy", String(r + 14));
-      // fill + font from CSS (.g2-label) so labels stay readable on either theme
       label.setAttribute("class", "g2-label");
       label.setAttribute("font-size", "10");
       label.setAttribute("pointer-events", "none");
       label.textContent = agent.name;
+      label.style.display = defaultLabels.has(node.id) ? "" : "none";
       g.appendChild(label);
+
+      // hover reveals this node's label even if it's not in the default set
+      circle.addEventListener("mouseenter", () => { hoverRef.current = node.id; label.style.display = ""; });
+      circle.addEventListener("mouseleave", () => {
+        hoverRef.current = null;
+        if (!defaultLabels.has(node.id) && selectedNodeId !== node.id) label.style.display = "none";
+      });
 
       // operation badge: a small glyph for a LIVE op this node owns (grounded —
       // null when the node owns no live operation, so nothing is drawn)
@@ -165,7 +197,7 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
         badgeEl.setAttribute("text-anchor", "middle");
         badgeEl.setAttribute("fill", "#b78bff");
         badgeEl.setAttribute("font-size", "12");
-        badgeEl.setAttribute("font-family", "IBM Plex Mono, monospace");
+        badgeEl.setAttribute("font-family", "var(--font-mono)");
         badgeEl.setAttribute("pointer-events", "none");
         badgeEl.textContent = badge.glyph;
         const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
@@ -174,13 +206,51 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
         g.appendChild(badgeEl);
       }
 
+      // drag to reposition (coords in the zoomed group's space via container).
+      // A tiny drag (no real movement) is treated as a click → select.
+      let downX = 0, downY = 0;
+      const dragBehavior = d3drag<SVGCircleElement, unknown>()
+        .container(() => g)
+        .on("start", (ev: D3DragEvent<SVGCircleElement, unknown, unknown>) => {
+          if (!ev.active) sim.alphaTarget(0.3).restart();
+          downX = ev.x; downY = ev.y;
+          node.fx = node.x; node.fy = node.y;
+        })
+        .on("drag", (ev: D3DragEvent<SVGCircleElement, unknown, unknown>) => {
+          node.fx = ev.x; node.fy = ev.y;
+        })
+        .on("end", (ev: D3DragEvent<SVGCircleElement, unknown, unknown>) => {
+          if (!ev.active) sim.alphaTarget(0);
+          const moved = Math.hypot(ev.x - downX, ev.y - downY);
+          node.fx = null; node.fy = null;   // release the pin so it rejoins the layout
+          if (moved < 3) onSelectNode(node.id);
+        });
+      select(circle).call(dragBehavior);
+
       return { circle, label, node, badgeEl, badgeR: r };
     });
+
+    // Zoom + pan on the whole SVG. Wheel zooms anywhere; background drag pans;
+    // a mousedown ON a node is left to d3-drag (so node drag != canvas pan).
+    const zb = d3zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.15, 6])
+      .filter((ev: Event) => {
+        if (ev.type === "wheel") return true;
+        const target = ev.target as Element | null;
+        return !(ev as MouseEvent).button && !(target && target instanceof SVGCircleElement);
+      })
+      .on("zoom", (ev: D3ZoomEvent<SVGSVGElement, unknown>) => {
+        zoomRef.current = ev.transform;
+        g.setAttribute("transform", ev.transform.toString());
+      });
+    const sel = select(svg);
+    sel.call(zb);
+    // re-sync the behavior's internal state to the persisted transform
+    sel.call(zb.transform, zoomRef.current);
 
     sim.on("tick", () => {
       nodes.forEach((node, i) => {
         const { x = 0, y = 0 } = node;
-        // Save position for next render cycle
         posMapRef.current.set(node.id, { x, y });
         nodeEls[i].circle.setAttribute("cx", String(x));
         nodeEls[i].circle.setAttribute("cy", String(y));
@@ -219,6 +289,7 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
   return (
     <svg
       ref={svgRef}
+      className="g2-svg"
       style={{ width: "100%", height: "100%", background: "transparent" }}
     />
   );

@@ -12,7 +12,7 @@ import { TopBar } from "./components/TopBar";
 import { TabStrip } from "./components/TabStrip";
 import { ViewSwitch } from "./components/ViewSwitch";
 import { SettingsMenu } from "./components/SettingsMenu";
-import { loadTheme, applyTheme, type Theme } from "./theme/theme";
+import { loadTheme, applyTheme, otherTheme, type Theme } from "./theme/theme";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
 import { RunPicker } from "./components/RunPicker";
@@ -123,8 +123,6 @@ export function App() {
         droppedCount={world.droppedCount}
         dryRun={world.dryRun}
         onOpenRuns={() => setShowRuns(true)}
-        onPauseAll={() => sendCommand({ kind: "agent_pause", agent_id: null })}
-        onStopAll={() => sendCommand({ kind: "agent_stop", agent_id: null })}
       >
         <SettingsMenu theme={theme} onSetTheme={setTheme} />
       </TopBar>
@@ -135,6 +133,8 @@ export function App() {
           onSetView={setView}
           funMode={funMode}
           onToggleFun={toggleFun}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => otherTheme(t))}
           shifted={analyticsUi.dock === "expanded"}
         />
 
@@ -163,7 +163,6 @@ export function App() {
               selectedNodeId={world.selectedNodeId}
               onSelectNode={selectNode}
               onSelectEdge={selectEdge}
-              onCommand={sendCommand}
             />
           </div>
         )}

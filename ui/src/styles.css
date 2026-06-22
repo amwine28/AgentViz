@@ -122,8 +122,10 @@ body {
   overflow: hidden;
 }
 
-/* crosshair belongs to the 3D/2D field, not the whole chrome */
-.stage-3d, .stage-2d { cursor: crosshair; }
+/* 3D field = crosshair; 2D graph is pan/zoomable so it gets grab affordance */
+.stage-3d { cursor: crosshair; }
+.g2-svg { cursor: grab; }
+.g2-svg:active { cursor: grabbing; }
 
 button, a, input, textarea { cursor: pointer; font-family: var(--font-mono); }
 textarea, input { cursor: text; }
@@ -545,9 +547,23 @@ textarea, input { cursor: text; }
 .approval-queue .panel-title { color: var(--c-approve); border-color: rgba(255, 209, 102, 0.25); }
 
 .approval-card {
+  position: relative;
   padding: 10px 14px 12px;
   border-bottom: 1px solid rgba(255, 209, 102, 0.12);
 }
+.approval-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.approval-dismiss:hover { color: var(--c-err); }
 .approval-card .who {
   font-size: 9px;
   letter-spacing: 0.16em;
@@ -646,10 +662,14 @@ textarea, input { cursor: text; }
   position: absolute;
   inset: 0;
   overflow: auto;
+  cursor: grab;            /* click-drag to pan the swimlanes */
   background:
     repeating-linear-gradient(to bottom, transparent 0 25px, rgba(var(--line-rgb), 0.03) 25px 26px),
     radial-gradient(120% 90% at 50% 0%, var(--void-1) 0%, var(--void-0) 70%);
 }
+.flow-view.grabbing { cursor: grabbing; }
+/* interactive marks inside flow keep their own cursor */
+.flow-lane-header, .flow-section, .flow-chip { cursor: pointer; }
 
 .flow-headers {
   position: sticky;
@@ -1133,6 +1153,13 @@ textarea, input { cursor: text; }
   align-items: center;
   gap: 10px;
   transition: right 0.18s ease;
+  /* opaque chip so it stays self-contained over any view (e.g. it no longer
+     bleeds into the FLOW lane headers behind it) */
+  background: var(--glass-heavy);
+  backdrop-filter: blur(14px);
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
 }
 /* slide left of the analytics panel (320px + 12px gutter) when it's open */
 .view-switch.shifted { right: 344px; }
@@ -1282,7 +1309,16 @@ textarea, input { cursor: text; }
    message tokens. Previously these were hardcoded dark values, invisible on
    the light theme. */
 .g2-node { fill: var(--surface-1); }
-.g2-label { fill: var(--ink-dim); font-family: var(--font-mono); }
+/* primary ink + a theme-matched halo so a label separates from neighbors/edges
+   (white halo on light, dark on dark — --surface-1 flips by theme) */
+.g2-label {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  paint-order: stroke fill;
+  stroke: var(--surface-1);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
 .g2-edge-spawn { stroke: var(--line-bright); }
 .g2-edge-msg { stroke: var(--c-msg); }
 .g2-arrow { fill: var(--line-bright); }

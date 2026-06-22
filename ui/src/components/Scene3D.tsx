@@ -281,6 +281,12 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       controls.autoRotateSpeed = 0.45;
       controls.addEventListener?.("start", () => { if (!funRef.current) controls.autoRotate = false; });
     }
+    // OrbitControls' "start" doesn't fire on wheel-zoom, so autoRotate keeps
+    // spinning and fights the user as they scroll to zoom. Halt it on the first
+    // wheel/pointer gesture (Hyperdrive owns rotation, so leave it alone there).
+    const stopAutoRotate = () => { if (controls && !funRef.current) controls.autoRotate = false; };
+    el.addEventListener("wheel", stopAutoRotate, { passive: true });
+    el.addEventListener("pointerdown", stopAutoRotate);
 
     const proj = new THREE.Vector3();
 
@@ -366,6 +372,8 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      el.removeEventListener("wheel", stopAutoRotate);
+      el.removeEventListener("pointerdown", stopAutoRotate);
       ro.disconnect();
       graph._destructor();
       graphRef.current = null;

@@ -9,14 +9,12 @@ interface Props {
   droppedCount: number;
   dryRun: boolean;
   onOpenRuns: () => void;
-  onPauseAll: () => void;
-  onStopAll: () => void;
   children?: ReactNode; // trailing slot (settings menu, etc.)
 }
 
 export function TopBar({
   connected, sessionName, runningCount, agentCount, eventCount, droppedCount,
-  dryRun, onOpenRuns, onPauseAll, onStopAll, children,
+  dryRun, onOpenRuns, children,
 }: Props) {
   return (
     <div className="topbar">
@@ -40,8 +38,6 @@ export function TopBar({
       <div className="tb-stat"><span className="num">{eventCount.toLocaleString()}</span> events</div>
 
       <button className="hud-btn" onClick={onOpenRuns} title="Browse & replay recorded runs">⟲ Runs</button>
-      <button className="hud-btn" onClick={onPauseAll} title="Pause every agent in the swarm">Pause all</button>
-      <button className="hud-btn danger" onClick={onStopAll} title="Stop the entire swarm">Stop all</button>
       {children}
     </div>
   );

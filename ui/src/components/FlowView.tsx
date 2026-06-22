@@ -16,7 +16,7 @@ const MAX_ROWS = 1500;
 
 const STATUS_COLOR: Record<string, string> = {
   running: "#3fe0ff",
-  waiting: "#ffb454",
+  waiting: "#ff9e3d",
   complete: "#6ef7a0",
   error: "#ff5277",
   paused: "#8b9bb4",
@@ -88,6 +88,34 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
     if (!el) return;
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   };
+
+  // Click-drag to pan the swimlane canvas (grab/grabbing). We only start a pan on
+  // non-interactive background — clicks on lane-header buttons / section toggles
+  // are left alone, so no threshold gymnastics needed.
+  const pan = useRef({ x: 0, y: 0, left: 0, top: 0, active: false });
+  const onPointerDown = (e: React.PointerEvent) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const t = e.target as Element;
+    if (t.closest("button") || t.closest(".flow-section")) return;
+    pan.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, active: true };
+    el.setPointerCapture?.(e.pointerId);
+    el.classList.add("grabbing");
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pan.current.active) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = pan.current.left - (e.clientX - pan.current.x);
+    el.scrollTop = pan.current.top - (e.clientY - pan.current.y);
+  };
+  const endPan = (e: React.PointerEvent) => {
+    if (!pan.current.active) return;
+    pan.current.active = false;
+    const el = scrollRef.current;
+    el?.releasePointerCapture?.(e.pointerId);
+    el?.classList.remove("grabbing");
+  };
   useEffect(() => {
     const el = scrollRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
@@ -136,7 +164,15 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
   }
 
   return (
-    <div className="flow-view" ref={scrollRef} onScroll={onScroll}>
+    <div
+      className="flow-view"
+      ref={scrollRef}
+      onScroll={onScroll}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endPan}
+      onPointerLeave={endPan}
+    >
       <div className="flow-headers" style={{ width }}>
         <div className="flow-filters" style={{ width: GUTTER }}>
           <button className={`flow-chip ${showTools ? "on" : ""}`} onClick={() => setShowTools((v) => !v)}>⚒</button>
