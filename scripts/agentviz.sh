@@ -4,6 +4,7 @@
 #                    [--replay <path-to-claude-code-session.jsonl> [--outcome=1]]
 #        agentviz.sh install     # define the `agentviz` command in ~/.zshrc (opt-in per terminal)
 #        agentviz.sh uninstall   # remove the shell hook
+#        agentviz.sh app [dir]   # build the double-clickable AgentViz.app (default ~/Desktop)
 #        agentviz.sh attach ...  # (internal) register the current terminal
 set -e
 
@@ -50,6 +51,11 @@ case "${1:-}" in
     shift
     exec bash "$REPO/scripts/agentviz-attach.sh" attach "$@"
     ;;
+  app|make-app)
+    # Build the double-clickable AgentViz.app (default: ~/Desktop). Pass a dir to override.
+    shift
+    exec bash "$REPO/scripts/make-desktop-app.sh" "$@"
+    ;;
 esac
 
 DEMO=0
@@ -58,11 +64,13 @@ NO_BROWSER=0
 REPLAY=""
 OUTCOME=""
 
+APP_WINDOW=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --demo) DEMO=1 ;;
     --rebuild) REBUILD=1 ;;
     --no-browser) NO_BROWSER=1 ;;
+    --app-window) APP_WINDOW=1 ;;   # open a chromeless app window (the desktop app uses this)
     --replay) shift; REPLAY="$1" ;;
     --outcome=*) OUTCOME="$1" ;;
   esac
@@ -109,9 +117,20 @@ fi
 URL="http://localhost:$PORT"
 echo "[agentviz] live 3D world: $URL"
 
-# --- browser ---------------------------------------------------------
+# --- open the UI -----------------------------------------------------
+# --app-window (the desktop app) opens a CHROMELESS Chrome window in its own
+# profile — no tabs/address bar, its own Dock tile — so AgentViz reads as a
+# standalone app. Falls back to a normal browser tab if Chrome isn't installed.
+CHROME_APP="/Applications/Google Chrome.app"
 if [ "$NO_BROWSER" != 1 ] && [ -z "$AGENTVIZ_NO_BROWSER" ]; then
-  open "$URL" 2>/dev/null || true
+  if [ "$APP_WINDOW" = 1 ] && [ -d "$CHROME_APP" ]; then
+    open -na "$CHROME_APP" --args \
+      --app="$URL" \
+      --user-data-dir="$HOME/.agentviz/app-profile" \
+      --no-first-run --no-default-browser-check 2>/dev/null || open "$URL" 2>/dev/null || true
+  else
+    open "$URL" 2>/dev/null || true
+  fi
 fi
 
 # --- replay a real Claude Code session -------------------------------

@@ -56,6 +56,26 @@ fails dramatically in error-red.
 
 Already have your own agents? See [SDK](#sdk) — it's one context manager.
 
+### Run it as a desktop app + watch any terminal (macOS)
+
+AgentViz is a multi-session, tabbed workspace: each terminal you opt in becomes
+its own tab, streaming its **real** activity — a live Claude Code session if you
+run `claude` there, otherwise the real commands you type. Nothing is shown for a
+terminal you didn't opt in.
+
+```bash
+# one-time: define the `agentviz` command + build a double-clickable app
+bash scripts/agentviz.sh install     # adds the `agentviz` command to ~/.zshrc
+bash scripts/agentviz.sh app         # builds AgentViz.app onto your Desktop
+```
+
+Then double-click **AgentViz.app** (it opens a chromeless window to an empty
+screen), and in any terminal you want to watch, run:
+
+```bash
+agentviz            # this terminal pops up as a tab; `agentviz off` to stop
+```
+
 ## The four views
 
 Switch any time with the toggle in the top bar, or press **`V`** to cycle.
