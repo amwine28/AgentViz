@@ -21,6 +21,7 @@ _AGENTVIZ_REPO="${AGENTVIZ_HOME:-$HOME/dev/AgentViz}"
 _AGENTVIZ_ATTACH="$_AGENTVIZ_REPO/scripts/agentviz-attach.sh"
 _AGENTVIZ_LAUNCH="$_AGENTVIZ_REPO/scripts/agentviz.sh"
 [ -x "$_AGENTVIZ_ATTACH" ] || return 0
+zmodload zsh/datetime 2>/dev/null   # provides $EPOCHSECONDS for honest event timestamps
 
 _agentviz_port() {
   python3 -c "import json;print(json.load(open('$HOME/.agentviz/relay.json'))['port'])" 2>/dev/null
@@ -78,23 +79,24 @@ _agentviz_preexec() {
     export AGENTVIZ_CC=1
     ( "$_AGENTVIZ_ATTACH" tail-cc "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
   fi
-  export AGENTVIZ_CALL="c${EPOCHSECONDS:-$(date +%s)}${RANDOM}"
+  local now="${EPOCHSECONDS:-$(date +%s)}"
+  export AGENTVIZ_CALL="c${now}${RANDOM}"
   local name; name="$(_agentviz_esc "${cmd%% *}")"
   local full; full="$(_agentviz_esc "$cmd")"
-  _agentviz_emit "{\"kind\":\"tool_call_pending\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"call_id\":\"$AGENTVIZ_CALL\",\"name\":\"$name\",\"args\":{\"cmd\":\"$full\"}}"
+  _agentviz_emit "{\"kind\":\"tool_call_pending\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"call_id\":\"$AGENTVIZ_CALL\",\"name\":\"$name\",\"args\":{\"cmd\":\"$full\"},\"timestamp\":$now}"
 }
 
 _agentviz_precmd() {
   local ec=$?
   [ -n "$AGENTVIZ_ON" ] || return 0
   [ -z "$AGENTVIZ_CALL" ] && return 0
-  _agentviz_emit "{\"kind\":\"tool_result\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"call_id\":\"$AGENTVIZ_CALL\",\"result\":$ec,\"duration_ms\":0}"
+  _agentviz_emit "{\"kind\":\"tool_result\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"call_id\":\"$AGENTVIZ_CALL\",\"result\":$ec,\"duration_ms\":0,\"timestamp\":${EPOCHSECONDS:-$(date +%s)}}"
   unset AGENTVIZ_CALL
 }
 
 _agentviz_exit() {
   [ -n "$AGENTVIZ_ON" ] || return 0
-  _agentviz_emit "{\"kind\":\"agent_complete\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"exit_status\":\"ok\",\"summary\":\"terminal closed\"}"
+  _agentviz_emit "{\"kind\":\"agent_complete\",\"session_id\":\"$AGENTVIZ_SESSION\",\"agent_id\":\"shell\",\"exit_status\":\"ok\",\"summary\":\"terminal closed\",\"timestamp\":${EPOCHSECONDS:-$(date +%s)}}"
 }
 
 autoload -Uz add-zsh-hook

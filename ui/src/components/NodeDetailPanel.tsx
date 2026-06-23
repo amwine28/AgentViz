@@ -5,9 +5,10 @@ interface Props {
   agent: AgentNode;
   onClose: () => void;
   onCommand: (cmd: Record<string, unknown>) => string;
+  live?: boolean; // false for observed/replayed sessions → hide dead mutating controls
 }
 
-export function NodeDetailPanel({ agent, onClose, onCommand }: Props) {
+export function NodeDetailPanel({ agent, onClose, onCommand, live = true }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingCalls = agent.tool_calls.filter((tc) => tc.pending);
   const doneCalls = agent.tool_calls.filter((tc) => !tc.pending);
@@ -24,11 +25,13 @@ export function NodeDetailPanel({ agent, onClose, onCommand }: Props) {
         <span className={`status-badge status-${agent.status}`}>{agent.status}</span>
       </div>
 
-      <div className="ctrl-row">
-        <button className="hud-btn" onClick={() => onCommand({ kind: "agent_pause", agent_id: agent.id })}>Pause</button>
-        <button className="hud-btn" onClick={() => onCommand({ kind: "agent_resume", agent_id: agent.id })}>Resume</button>
-        <button className="hud-btn danger" onClick={() => onCommand({ kind: "agent_stop", agent_id: agent.id })}>Stop</button>
-      </div>
+      {live && (
+        <div className="ctrl-row">
+          <button className="hud-btn" onClick={() => onCommand({ kind: "agent_pause", agent_id: agent.id })}>Pause</button>
+          <button className="hud-btn" onClick={() => onCommand({ kind: "agent_resume", agent_id: agent.id })}>Resume</button>
+          <button className="hud-btn danger" onClick={() => onCommand({ kind: "agent_stop", agent_id: agent.id })}>Stop</button>
+        </div>
+      )}
 
       <div className="section-label">Tool calls — {agent.tool_calls.length}</div>
       <div className="scroll-area">
@@ -50,6 +53,7 @@ export function NodeDetailPanel({ agent, onClose, onCommand }: Props) {
               <div className="tc-denied">✗ denied ({tc.denied})</div>
             ) : (
               <div className="tc-result">
+                {tc.simulated ? <span className="tc-mock">~ mock </span> : null}
                 {String(tc.result ?? "").slice(0, 120)}
                 {tc.duration_ms != null ? `  ·  ${tc.duration_ms}ms` : ""}
               </div>
@@ -65,21 +69,23 @@ export function NodeDetailPanel({ agent, onClose, onCommand }: Props) {
         ))}
       </div>
 
-      <div className="inject-area">
-        <textarea ref={textareaRef} rows={2} placeholder="Inject instruction to this agent…" />
-        <button
-          className="hud-btn"
-          onClick={() => {
-            const val = textareaRef.current?.value.trim();
-            if (val) {
-              onCommand({ kind: "inject_message", agent_id: agent.id, content: val });
-              if (textareaRef.current) textareaRef.current.value = "";
-            }
-          }}
-        >
-          Transmit
-        </button>
-      </div>
+      {live && (
+        <div className="inject-area">
+          <textarea ref={textareaRef} rows={2} placeholder="Inject instruction to this agent…" />
+          <button
+            className="hud-btn"
+            onClick={() => {
+              const val = textareaRef.current?.value.trim();
+              if (val) {
+                onCommand({ kind: "inject_message", agent_id: agent.id, content: val });
+                if (textareaRef.current) textareaRef.current.value = "";
+              }
+            }}
+          >
+            Transmit
+          </button>
+        </div>
+      )}
     </div>
   );
 }

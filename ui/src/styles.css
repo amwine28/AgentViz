@@ -1323,3 +1323,6 @@ textarea, input { cursor: text; }
 .g2-edge-msg { stroke: var(--c-msg); }
 .g2-arrow { fill: var(--line-bright); }
 .g2-arrow-msg { fill: var(--c-msg); }
+
+/* dry-run / mock tool result marker (NodeDetailPanel) */
+.tc-mock { color: #b78bff; font-weight: 600; }

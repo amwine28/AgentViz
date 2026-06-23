@@ -122,8 +122,10 @@ export function groupFlowRows(
   const flush = () => {
     if (run.length === 0) return;
     if (run.length >= minGroup) {
-      const first = run[0].event as { timestamp?: number };
-      const key = `${run[0].lane}:${first.timestamp ?? 0}:${run.length >= 0 ? run[0].event.kind : ""}`;
+      // Key on the output position (monotonic + unique) so timestamp-less events
+      // can't collide into one duplicate key (which made expanding one section
+      // expand them all + warned about duplicate React keys).
+      const key = `sec:${run[0].lane}:${out.length}:${run[0].event.kind}`;
       out.push({ type: "section", key, lane: run[0].lane, rows: run });
       if (expanded.has(key)) {
         for (const r of run) out.push({ type: "row", row: r });

@@ -354,12 +354,14 @@ export function FlowView({ timeline, agents, onSelectNode }: Props) {
               const resultText = typeof e.result === "object" && e.result !== null
                 ? JSON.stringify(e.result)
                 : String(e.result ?? "");
+              const sim = e.simulated;  // dry-run mock — not actually executed
+              const col = sim ? "#b78bff" : "#6ef7a0";
               return (
                 <g key={i}>{ts}
-                  <text x={x - 4} y={y + 4} fill="#6ef7a0" fontSize={11}>✓</text>
-                  <text x={x + 12} y={y + 3} className="flow-label" fill="#6ef7a0">
+                  <text x={x - 4} y={y + 4} fill={col} fontSize={11}>{sim ? "◌" : "✓"}</text>
+                  <text x={x + 12} y={y + 3} className="flow-label" fill={col}>
                     <title>{resultText}</title>
-                    {truncate(resultText, 24)} · {e.duration_ms}ms
+                    {sim ? "~mock " : ""}{truncate(resultText, 22)} · {e.duration_ms}ms
                   </text>
                 </g>
               );

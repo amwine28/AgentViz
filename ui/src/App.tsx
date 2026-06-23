@@ -59,8 +59,14 @@ export function App() {
 
   const tabs = sessionTabs(state);
 
-  const loadRun = useCallback((events: object[]) =>
-    dispatch({ type: "batch_events", events: events as AgentVizEvent[] }), []);
+  const loadRun = useCallback((events: object[]) => {
+    // Re-stamp a loaded run into its OWN tab so replaying can never clobber a
+    // live session that shares a session_id (or "_legacy").
+    const stamped = (events as AgentVizEvent[]).map((e) => ({
+      ...e, session_id: `replay:${(e as { run_id?: string }).run_id ?? "run"}`,
+    }));
+    dispatch({ type: "batch_events", events: stamped });
+  }, []);
 
   useEffect(() => {
     const conn = createWsConnection(RELAY_PORT, dispatch as (a: { type: string; [key: string]: unknown }) => void);
@@ -79,6 +85,15 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [state.activeId]);
+
+  // When the first real session activates, carry over any per-tab UI state the
+  // user set on the "_pending" (no-session) screen so it isn't lost.
+  useEffect(() => {
+    const id = state.activeId;
+    if (!id || id === "_pending") return;
+    setShell((m) => (m["_pending"] && !m[id] ? { ...m, [id]: m["_pending"] } : m));
+    setAnalytics((m) => (m["_pending"] && !m[id] ? { ...m, [id]: m["_pending"] } : m));
   }, [state.activeId]);
 
   // Stamp the active tab's session id onto outgoing commands so an approve /
@@ -178,12 +193,12 @@ export function App() {
           </div>
         )}
 
-        {agentList.length === 0 && world.operations.size === 0 && (
+        {(view === "3d" || view === "2d") && agentList.length === 0 && world.operations.size === 0 && (
           <div className="empty-state">
             <div className="big">{state.connected ? "AWAITING SIGNAL" : "RELAY OFFLINE"}</div>
             <div className="hint">
               {state.connected
-                ? <>run <code>agentviz</code> in any terminal to add it as a tab — or wrap your agents with the SDK</>
+                ? <>install the shell hook (<code>bash scripts/agentviz.sh install</code>), then run <code>agentviz</code> in any terminal — or wrap your agents with the SDK</>
                 : <>can't reach the relay on port {RELAY_PORT} — start it, then this reconnects automatically</>}
             </div>
           </div>
@@ -194,6 +209,7 @@ export function App() {
             agent={selectedAgent}
             onClose={() => selectNode(null)}
             onCommand={sendCommand}
+            live={state.connected && !(state.activeId ?? "").startsWith("replay:")}
           />
         )}
         {!selectedAgent && world.selectedEdgeKey && world.messageEdges[world.selectedEdgeKey] && (
@@ -220,7 +236,8 @@ export function App() {
 
         {(view === "3d" || view === "2d") && (
           <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>
-            {LEGEND.map((l) => (
+            {/* the "needs approval" ring only exists in the 3D field — don't promise it in 2D */}
+            {LEGEND.filter((l) => !(l.ring && view === "2d")).map((l) => (
               <div key={l.label} className="legend-row">
                 <span
                   className="legend-dot"
