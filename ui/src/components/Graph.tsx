@@ -35,12 +35,18 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
   // Tracks current node positions so we can seed them on re-render
   const posMapRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  // Maps agent_id → circle element for fast selection highlighting
+  // Maps agent_id → circle/label element for fast selection + label updates
   const circleMapRef = useRef<Map<string, SVGCircleElement>>(new Map());
+  const labelMapRef = useRef<Map<string, SVGTextElement>>(new Map());
+  // Which labels are shown by default (selected/hover are layered on top of this).
+  const defaultLabelsRef = useRef<Set<string>>(new Set());
   // Persisted zoom/pan transform — survives the SVG rebuild on data change.
   const zoomRef = useRef<ZoomTransform>(zoomIdentity);
   // The node whose label is force-shown via hover (in addition to the default set).
   const hoverRef = useRef<string | null>(null);
+  // Current selection, read inside event closures so they never go stale.
+  const selectedRef = useRef<string | null>(selectedNodeId);
+  selectedRef.current = selectedNodeId;
 
   // Effect 1: rebuild simulation when graph structure changes (NOT when selectedNodeId changes)
   useEffect(() => {
@@ -93,6 +99,8 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
       if (isRoot(n.id)) defaultLabels.add(n.id);
       if (operationBadge(n.id, operations)) defaultLabels.add(n.id);
     }
+    defaultLabelsRef.current = defaultLabels;
+    labelMapRef.current.clear();
 
     if (simRef.current) simRef.current.stop();
 
@@ -178,14 +186,16 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
       label.setAttribute("font-size", "10");
       label.setAttribute("pointer-events", "none");
       label.textContent = agent.name;
-      label.style.display = defaultLabels.has(node.id) ? "" : "none";
+      label.style.display = (defaultLabels.has(node.id) || node.id === selectedRef.current) ? "" : "none";
       g.appendChild(label);
+      labelMapRef.current.set(node.id, label);
 
       // hover reveals this node's label even if it's not in the default set
       circle.addEventListener("mouseenter", () => { hoverRef.current = node.id; label.style.display = ""; });
       circle.addEventListener("mouseleave", () => {
         hoverRef.current = null;
-        if (!defaultLabels.has(node.id) && selectedNodeId !== node.id) label.style.display = "none";
+        // read selection from the ref so this closure never goes stale
+        if (!defaultLabels.has(node.id) && selectedRef.current !== node.id) label.style.display = "none";
       });
 
       // operation badge: a small glyph for a LIVE op this node owns (grounded —
@@ -279,10 +289,16 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents, messageEdges, operations, onSelectNode, onSelectEdge]);
 
-  // Effect 2: update stroke-width on selection change WITHOUT restarting simulation
+  // Effect 2: update stroke-width AND label visibility on selection change WITHOUT
+  // restarting the simulation. The selected node's label always shows; on
+  // deselect it reverts to whether it was a default/hovered label.
   useEffect(() => {
     for (const [id, circle] of circleMapRef.current) {
       circle.setAttribute("stroke-width", id === selectedNodeId ? "3" : "1.5");
+    }
+    for (const [id, label] of labelMapRef.current) {
+      const show = id === selectedNodeId || id === hoverRef.current || defaultLabelsRef.current.has(id);
+      label.style.display = show ? "" : "none";
     }
   }, [selectedNodeId]);
 

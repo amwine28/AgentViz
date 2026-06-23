@@ -36,6 +36,24 @@ describe("store reducer", () => {
     expect(state.agents["a1"].tool_calls[0].name).toBe("my_tool");
   });
 
+  test("tool_call_pending lazily creates the agent when none was spawned (shell HTTP race)", () => {
+    const toolCall: ToolCallPendingEvent = { kind: "tool_call_pending", agent_id: "shell", call_id: "c1", name: "npm", args: { cmd: "npm test" }, timestamp: 2 };
+    const state = reducer(initialState, { type: "event", event: toolCall });
+    expect(state.agents["shell"]).toBeDefined();
+    expect(state.agents["shell"].status).toBe("running");
+    expect(state.agents["shell"].tool_calls[0].name).toBe("npm");
+  });
+
+  test("tool_result arriving before its pending call self-heals (agent + resolved call)", () => {
+    const result = { kind: "tool_result", agent_id: "shell", call_id: "c9", result: 0, duration_ms: 5, simulated: false, timestamp: 3 } as unknown as AgentVizEvent;
+    const state = reducer(initialState, { type: "event", event: result });
+    expect(state.agents["shell"]).toBeDefined();
+    const tc = state.agents["shell"].tool_calls.find((t) => t.call_id === "c9");
+    expect(tc).toBeDefined();
+    expect(tc!.pending).toBe(false);
+    expect(tc!.result).toBe(0);
+  });
+
   test("agent_message creates message edge", () => {
     const msg: AgentMessageEvent = { kind: "agent_message", from_agent_id: "a1", to_agent_id: "a2", content: "hello", timestamp: 1 };
     const state = reducer(initialState, { type: "event", event: msg });

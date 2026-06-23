@@ -118,14 +118,16 @@ export function groupFlowRows(
 ): FlowDisplayRow[] {
   const out: FlowDisplayRow[] = [];
   let run: FlowRow[] = [];
+  let sectionIdx = 0;  // per-section ordinal — unique AND stable across expand toggles
 
   const flush = () => {
     if (run.length === 0) return;
     if (run.length >= minGroup) {
-      // Key on the output position (monotonic + unique) so timestamp-less events
-      // can't collide into one duplicate key (which made expanding one section
-      // expand them all + warned about duplicate React keys).
-      const key = `sec:${run[0].lane}:${out.length}:${run[0].event.kind}`;
+      // Key on a per-section ordinal (not out.length, which shifts as expanded
+      // sections push rows — that lost the expand state of later same-lane
+      // sections). The ordinal is unique and stable across expand/collapse, so it
+      // also fixes the original duplicate-key collision for timestamp-less events.
+      const key = `sec:${run[0].lane}:${sectionIdx++}:${run[0].event.kind}`;
       out.push({ type: "section", key, lane: run[0].lane, rows: run });
       if (expanded.has(key)) {
         for (const r of run) out.push({ type: "row", row: r });

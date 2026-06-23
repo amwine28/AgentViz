@@ -67,6 +67,23 @@ describe("multiStore", () => {
     expect(s.activeId).toBe("B");
   });
 
+  it("a closed session does not resurrect on a stray event, but a fresh session_start re-opens it", () => {
+    let s = feed(initialMultiState,
+      ev({ kind: "session_start", name: "A", session_id: "A", timestamp: 1 }),
+      ev({ kind: "agent_spawn", agent_id: "a1", name: "x", parent_id: null, session_id: "A", timestamp: 2 }),
+    );
+    s = rootReducer(s, { type: "close_session", session_id: "A" });
+    expect(s.sessions.A).toBeUndefined();
+    // a late stray event for the closed tab is ignored (no resurrection)
+    s = feed(s, ev({ kind: "log", agent_id: "a1", content: "late", level: "info", session_id: "A", timestamp: 3 }));
+    expect(s.sessions.A).toBeUndefined();
+    expect(s.order).not.toContain("A");
+    // but an explicit restart re-opens the tab
+    s = feed(s, ev({ kind: "session_start", name: "A2", session_id: "A", timestamp: 4 }));
+    expect(s.sessions.A).toBeDefined();
+    expect(s.closed.has("A")).toBe(false);
+  });
+
   it("sessionTabs reflects order, labels and status", () => {
     let s = feed(initialMultiState,
       ev({ kind: "session_start", name: "Run A", session_id: "A", timestamp: 1 }),

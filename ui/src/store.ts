@@ -199,13 +199,17 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       };
     }
     case "tool_result": {
-      const agent = state.agents[event.agent_id];
-      if (!agent) return state;
-      const updated = agent.tool_calls.map((tc) =>
-        tc.call_id === event.call_id
-          ? { ...tc, pending: false, result: event.result, duration_ms: event.duration_ms, simulated: event.simulated }
-          : tc
-      );
+      // Self-heal like tool_call_pending: if the agent is missing (HTTP /ingest
+      // reordering) lazy-create it; if the matching call hasn't arrived yet,
+      // append a resolved call so the result isn't lost.
+      const agent = state.agents[event.agent_id] ?? minimalAgent(event.agent_id);
+      const has = agent.tool_calls.some((tc) => tc.call_id === event.call_id);
+      const updated = has
+        ? agent.tool_calls.map((tc) =>
+            tc.call_id === event.call_id
+              ? { ...tc, pending: false, result: event.result, duration_ms: event.duration_ms, simulated: event.simulated }
+              : tc)
+        : [...agent.tool_calls, { call_id: event.call_id, name: "", args: {}, pending: false, result: event.result, duration_ms: event.duration_ms, simulated: event.simulated }];
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, tool_calls: updated } } };
     }
     case "tool_denied": {
@@ -246,8 +250,7 @@ function applyEvent(rawState: AppState, event: AgentVizEvent): AppState {
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, logs: [...agent.logs, log] } } };
     }
     case "agent_complete": {
-      const agent = state.agents[event.agent_id];
-      if (!agent) return state;
+      const agent = state.agents[event.agent_id] ?? minimalAgent(event.agent_id);
       const status: AgentStatus = event.exit_status === "ok" ? "complete" : event.exit_status === "stopped" ? "paused" : "error";
       // persist completion data for Rung 1 sink inference (last-completing-leaf fallback)
       return { ...state, agents: { ...state.agents, [event.agent_id]: { ...agent, status, completed_at: event.timestamp, exit_status: event.exit_status } } };

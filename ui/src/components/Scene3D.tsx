@@ -460,14 +460,23 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     if (starfieldRef.current) starfieldRef.current.visible = theme === "dark";
     // Hyperdrive owns the bloom while it's on; otherwise track the theme's resting glow.
     if (bloomRef.current && !funRef.current) bloomRef.current.strength = RESTING_BLOOM[theme];
-    // Repaint label plates for the new theme (dark plates floated on light paper).
-    for (const v of visualsRef.current.values()) {
+    // Repaint label + badge plates for the new theme (dark plates floated on the
+    // light paper field).
+    for (const [id, v] of visualsRef.current) {
       v.group.remove(v.label);
       v.label.material.map?.dispose();
       v.label.material.dispose();
       const nl = makeLabelSprite(v.labelText, theme);
       v.group.add(nl);
       v.label = nl;
+      if (v.badge) {
+        const b = operationBadge(id, operationsRef.current);
+        v.group.remove(v.badge);
+        v.badge.material.map?.dispose();
+        v.badge.material.dispose();
+        v.badge = b ? makeBadgeSprite(b.glyph, theme) : null;
+        if (v.badge) v.group.add(v.badge);
+      }
     }
   }, [theme]);
 
