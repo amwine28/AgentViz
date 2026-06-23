@@ -55,16 +55,20 @@ function routeEvent(s: MultiState, event: AgentVizEvent): MultiState {
   const nextWorld = sessionReducer(world, { type: "event", event });
 
   let names = s.names;
+  let activeId = s.activeId ?? sid; // first session to appear becomes the active tab
   if (event.kind === "session_start") {
-    const name = (event as { name?: string }).name;
-    if (name && names[sid] === undefined) names = { ...names, [sid]: name };
+    const start = event as { name?: string; source?: string };
+    if (start.name && names[sid] === undefined) names = { ...names, [sid]: start.name };
+    // A user explicitly running `agentviz` in a terminal (source=shell) wants to
+    // SEE that terminal — focus it, so it isn't hidden behind older/stale tabs.
+    if (start.source === "shell") activeId = sid;
   }
 
   return {
     ...s,
     sessions: { ...s.sessions, [sid]: nextWorld },
     order: existed ? s.order : [...s.order, sid],
-    activeId: s.activeId ?? sid, // first session to appear becomes the active tab
+    activeId,
     names,
   };
 }

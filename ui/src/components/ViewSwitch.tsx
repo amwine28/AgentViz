@@ -7,7 +7,8 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "flow", label: "FLOW" },
 ];
 
-// The view switcher, relocated to the upper-right corner of the stage.
+// The view switcher — lives in the top bar (chrome), so it never covers the
+// agents on the canvas. Still upper-right, just out of the field.
 export function ViewSwitch({
   view,
   onSetView,
@@ -15,7 +16,6 @@ export function ViewSwitch({
   onToggleFun,
   theme,
   onToggleTheme,
-  shifted,
 }: {
   view: ViewMode;
   onSetView: (v: ViewMode) => void;
@@ -23,10 +23,9 @@ export function ViewSwitch({
   onToggleFun: () => void;
   theme: Theme;
   onToggleTheme: () => void;
-  shifted?: boolean; // shift left when the analytics panel is expanded
 }) {
   return (
-    <div className={`view-switch ${shifted ? "shifted" : ""}`}>
+    <div className="view-switch">
       <div className="view-toggle" role="group" aria-label="Visualization view">
         {VIEWS.map((v, i) => (
           <span key={v.id} style={{ display: "contents" }}>

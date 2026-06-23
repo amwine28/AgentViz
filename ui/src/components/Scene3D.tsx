@@ -146,7 +146,7 @@ function makeLabelSprite(text: string, theme: Theme): THREE.Sprite {
   sprite.renderOrder = 999;
   const scale = 0.2;
   sprite.scale.set(w * scale, h * scale, 1);
-  sprite.position.set(0, 9.5, 0);
+  sprite.position.set(0, 13.5, 0);
   return sprite;
 }
 
@@ -240,7 +240,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         const group = new THREE.Group();
 
         const core = new THREE.Mesh(
-          new THREE.SphereGeometry(3.4, 24, 24),
+          new THREE.SphereGeometry(6, 24, 24),   // bigger nodes — easier to see + hover
           new THREE.MeshBasicMaterial({ color })
         );
         group.add(core);
@@ -248,11 +248,11 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         const halo = new THREE.Sprite(new THREE.SpriteMaterial({
           map: haloTexRef.current!, color, transparent: true, opacity: HALO_OPACITY[themeRef.current].base, depthWrite: false,
         }));
-        halo.scale.set(9, 9, 1);
+        halo.scale.set(14, 14, 1);
         group.add(halo);
 
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(7.5, 0.42, 10, 48),
+          new THREE.TorusGeometry(11, 0.55, 10, 48),
           new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95 })
         );
         ring.visible = n.pending > 0;
@@ -376,7 +376,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
             v.ring.lookAt(cam.position);
           }
           if (v.status === "running") {
-            const hs = 9 + 1.1 * Math.sin(t * 2.1);
+            const hs = 14 + 1.6 * Math.sin(t * 2.1);
             v.halo.scale.set(hs, hs, 1);
           }
         }
@@ -395,21 +395,12 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         items.push({ v, id, sx, sy, dist, infront, pri });
       }
 
-      // highest priority + nearest first; everyone else yields the space
-      items.sort((a, b) => b.pri - a.pri || a.dist - b.dist);
-      const placed: { x: number; y: number }[] = [];
-      const MINX = 96, MINY = 16;
+      // Names ONLY on hover/selection — always-on labels smeared the whole field
+      // into an unreadable wall over the nodes. The field now shows clean nodes;
+      // hover any node (or select it) to reveal its name.
       for (const it of items) {
-        if (fun || !it.infront) { it.v.label.visible = false; continue; }
-        let ok = it.id === selectedRef.current || it.id === hoverRef.current;
-        if (!ok) {
-          ok = true;
-          for (const p of placed) {
-            if (Math.abs(p.x - it.sx) < MINX && Math.abs(p.y - it.sy) < MINY) { ok = false; break; }
-          }
-        }
-        it.v.label.visible = ok;
-        if (ok) placed.push({ x: it.sx, y: it.sy });
+        it.v.label.visible = !fun && it.infront
+          && (it.id === hoverRef.current || it.id === selectedRef.current);
       }
 
       rafRef.current = requestAnimationFrame(animate);
@@ -465,7 +456,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         v.core.material.color = color;
         v.halo.material.color = color;
         v.core.scale.setScalar(1);
-        v.halo.scale.set(9, 9, 1);
+        v.halo.scale.set(14, 14, 1);
       }
     }
   }, [funMode]);
@@ -562,7 +553,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
           const color = new THREE.Color(statusColor(a.status, themeRef.current));
           v.core.material.color = color;
           v.halo.material.color = color;
-          if (a.status !== "running") v.halo.scale.set(9, 9, 1);
+          if (a.status !== "running") v.halo.scale.set(14, 14, 1);
         }
       }
     }

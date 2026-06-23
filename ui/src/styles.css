@@ -1143,26 +1143,12 @@ textarea, input { cursor: text; }
 }
 .tab-close:hover { color: var(--c-err); opacity: 1; }
 
-/* ---- v2: view switch — relocated to the stage's upper-right ------ */
+/* ---- v2: view switch — lives in the top bar (chrome), not over the canvas --- */
 .view-switch {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 49;            /* above panels so it stays clickable */
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: right 0.18s ease;
-  /* opaque chip so it stays self-contained over any view (e.g. it no longer
-     bleeds into the FLOW lane headers behind it) */
-  background: var(--glass-heavy);
-  backdrop-filter: blur(14px);
-  padding: 6px 8px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
+  gap: 8px;
 }
-/* slide left of the analytics panel (320px + 12px gutter) when it's open */
-.view-switch.shifted { right: 344px; }
 
 /* ---- v2: analytics panel (per-tab, dockable on the right edge) --- */
 /* minimized state: a thin vertical rail tab clinging to the right edge */

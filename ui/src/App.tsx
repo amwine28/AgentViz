@@ -150,10 +150,6 @@ export function App() {
         dryRun={world.dryRun}
         onOpenRuns={() => setShowRuns(true)}
       >
-        <SettingsMenu theme={theme} onSetTheme={setTheme} />
-      </TopBar>
-
-      <div className="stage">
         <ViewSwitch
           view={view}
           onSetView={setView}
@@ -161,9 +157,11 @@ export function App() {
           onToggleFun={toggleFun}
           theme={theme}
           onToggleTheme={() => setTheme((t) => otherTheme(t))}
-          shifted={analyticsUi.dock === "expanded"}
         />
+        <SettingsMenu theme={theme} onSetTheme={setTheme} />
+      </TopBar>
 
+      <div className="stage">
         {view === "3d" ? (
           <Scene3D
             agents={world.agents}
