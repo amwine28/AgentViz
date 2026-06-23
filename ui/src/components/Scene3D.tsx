@@ -28,6 +28,25 @@ const STATUS_COLOR: Record<string, string> = {
   error: "#ff5277",
   paused: "#8b9bb4",
 };
+// Darker status palette for the LIGHT field — the phosphor colors above are tuned
+// for the dark void and wash out on cream. (Mirrors the 2D/CSS light tokens.)
+const STATUS_COLOR_LIGHT: Record<string, string> = {
+  running: "#1f6fb0",
+  waiting: "#b06f12",
+  complete: "#1f8a4c",
+  error: "#c0344d",
+  paused: "#6f6a5e",
+};
+function statusColor(status: string, theme: Theme): string {
+  const map = theme === "light" ? STATUS_COLOR_LIGHT : STATUS_COLOR;
+  return map[status] ?? (theme === "light" ? "#6f6a5e" : "#8b9bb4");
+}
+// The node halo is a dark-field GLOW; on the light theme it just washes the
+// canvas white, so keep it near-off (a faint selected accent only).
+const HALO_OPACITY: Record<Theme, { sel: number; base: number }> = {
+  dark: { sel: 1, base: 0.85 },
+  light: { sel: 0.22, base: 0.0 },
+};
 
 // HYPERDRIVE palette — saturated neon for the fun-mode particle storm
 const NEON = ["#ff2d95", "#3fe0ff", "#ffe14d", "#8a5cff", "#34ff9e", "#ff7a3d"];
@@ -217,7 +236,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       .backgroundColor(FIELD_BG[themeRef.current])
       .showNavInfo(false)
       .nodeThreeObject((n: VizNode) => {
-        const color = new THREE.Color(STATUS_COLOR[n.status] ?? "#8b9bb4");
+        const color = new THREE.Color(statusColor(n.status, themeRef.current));
         const group = new THREE.Group();
 
         const core = new THREE.Mesh(
@@ -227,7 +246,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         group.add(core);
 
         const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: haloTexRef.current!, color, transparent: true, opacity: 0.18, depthWrite: false,
+          map: haloTexRef.current!, color, transparent: true, opacity: HALO_OPACITY[themeRef.current].base, depthWrite: false,
         }));
         halo.scale.set(9, 9, 1);
         group.add(halo);
@@ -442,7 +461,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
         .linkDirectionalParticleColor(() => "#7df3ff");
       // restore status colors + resting scales the fun loop overrode
       for (const v of visualsRef.current.values()) {
-        const color = new THREE.Color(STATUS_COLOR[v.status] ?? "#8b9bb4");
+        const color = new THREE.Color(statusColor(v.status, themeRef.current));
         v.core.material.color = color;
         v.halo.material.color = color;
         v.core.scale.setScalar(1);
@@ -460,9 +479,17 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     if (starfieldRef.current) starfieldRef.current.visible = theme === "dark";
     // Hyperdrive owns the bloom while it's on; otherwise track the theme's resting glow.
     if (bloomRef.current && !funRef.current) bloomRef.current.strength = RESTING_BLOOM[theme];
-    // Repaint label + badge plates for the new theme (dark plates floated on the
-    // light paper field).
+    // Recolor nodes for the new theme: darker status colors + near-off halos on
+    // light (the phosphor palette + glowing halos white-out the cream field), and
+    // repaint label/badge plates (dark plates floated on light paper).
+    const haloOp = HALO_OPACITY[theme];
     for (const [id, v] of visualsRef.current) {
+      if (!funRef.current) {
+        const color = new THREE.Color(statusColor(v.status, theme));
+        v.core.material.color = color;
+        v.halo.material.color = color;
+        v.halo.material.opacity = id === selectedRef.current ? haloOp.sel : haloOp.base;
+      }
       v.group.remove(v.label);
       v.label.material.map?.dispose();
       v.label.material.dispose();
@@ -532,7 +559,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       if (v.status !== a.status) {
         v.status = a.status;
         if (!funRef.current) {
-          const color = new THREE.Color(STATUS_COLOR[a.status] ?? "#8b9bb4");
+          const color = new THREE.Color(statusColor(a.status, themeRef.current));
           v.core.material.color = color;
           v.halo.material.color = color;
           if (a.status !== "running") v.halo.scale.set(9, 9, 1);
@@ -576,10 +603,12 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
 
   /* ---- selection highlight: brighten the chosen one ---- */
   useEffect(() => {
+    const op = HALO_OPACITY[themeRef.current];
     for (const [id, v] of visualsRef.current) {
       const selected = id === selectedNodeId;
       if (!funRef.current) v.core.scale.setScalar(selected ? 1.45 : 1);
-      v.halo.material.opacity = selected ? 1 : 0.85;
+      // halos are a dark-field glow — near-off on light so they don't white-out the canvas
+      v.halo.material.opacity = selected ? op.sel : op.base;
     }
   }, [selectedNodeId, agents]);
 
