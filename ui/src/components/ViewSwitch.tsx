@@ -35,14 +35,14 @@ export function ViewSwitch({
           </span>
         ))}
       </div>
-      {view === "3d" && (
-        <button
-          className={`hud-btn ${theme === "dark" ? "active" : ""}`}
-          onClick={onToggleTheme}
-          aria-pressed={theme === "dark"}
-          title="Night sky — dark 3D field with a live starfield"
-        >{theme === "dark" ? "☾ Night" : "☼ Day"}</button>
-      )}
+      {/* global light/dark theme toggle — always shown so the top bar never
+         changes width between views (3D adds the starfield in night mode) */}
+      <button
+        className={`hud-btn ${theme === "dark" ? "active" : ""}`}
+        onClick={onToggleTheme}
+        aria-pressed={theme === "dark"}
+        title={theme === "dark" ? "Night — dark theme (starfield in 3D)" : "Day — light theme"}
+      >{theme === "dark" ? "☾ Night" : "☼ Day"}</button>
       <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW / FILES">[V]</span>
     </div>
   );
