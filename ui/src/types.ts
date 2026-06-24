@@ -48,6 +48,7 @@ export interface SessionStartEvent {
   source?: "claude-code" | "shell" | "sdk";
   cwd?: string;
   git_branch?: string;
+  baseline_run_id?: string;   // re-run grouping: the base run this re-run nests under
   timestamp: number;
 }
 export interface CommandAckEvent {

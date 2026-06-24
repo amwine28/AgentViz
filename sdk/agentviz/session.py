@@ -37,11 +37,16 @@ def discover_relay_port() -> int | None:
 
 class Session:
     def __init__(self, name: str, port: int | None = None, autostart_relay: bool = True,
-                 dry_run: bool = False):
+                 dry_run: bool = False, run_id: str | None = None,
+                 baseline_run_id: str | None = None):
         self.name = name
         # Stable id for this run — stamped on every event; the key the future
         # re-run engine and append-only log are keyed on (Phase E foundation).
-        self.run_id: str = str(uuid.uuid4())
+        # May be supplied (the re-run engine pins the probe to a known base id).
+        self.run_id: str = run_id or str(uuid.uuid4())
+        # If set, this run is a RE-RUN of run_id=baseline_run_id; the Logs panel
+        # nests it under that base run.
+        self.baseline_run_id: str | None = baseline_run_id
         # Mock-side-effects re-run mode: agents created here inherit it; external
         # side-effecting tools are never executed (the safety layer, §6.3).
         self.dry_run: bool = dry_run
@@ -97,7 +102,8 @@ class Session:
         self._client.on_command("tool_approve", self._dispatch_tool_approval)
         self._client.on_command("tool_deny", self._dispatch_tool_denial)
         await self._client.connect(wait_timeout=wait_timeout)
-        await self._client.send(serialize(SessionStartEvent(name=self.name, dry_run=self.dry_run, source="sdk")))
+        await self._client.send(serialize(SessionStartEvent(
+            name=self.name, dry_run=self.dry_run, source="sdk", baseline_run_id=self.baseline_run_id)))
 
     async def close(self, flush_timeout: float = 2.0) -> None:
         if self._client:

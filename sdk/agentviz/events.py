@@ -61,6 +61,9 @@ class SessionStartEvent:
     source: Literal["claude-code", "shell", "sdk"] | None = None
     cwd: str | None = None
     git_branch: str | None = None
+    # re-run grouping: a re-run sets this to the BASE run's run_id so the Logs panel
+    # nests it under that run (null for an ordinary, top-level run).
+    baseline_run_id: str | None = None
     timestamp: float = field(default_factory=_now)
 
 @dataclass

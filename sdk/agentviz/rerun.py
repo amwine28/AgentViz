@@ -17,6 +17,7 @@ asyncio.run() — one fresh loop per coalition run — so it owns no running eve
 If you call it from async code, offload with `await asyncio.to_thread(measure_credit_by_rerun, ...)`.
 """
 import asyncio
+import uuid
 from collections.abc import Awaitable, Callable
 
 from .session import Session
@@ -42,11 +43,13 @@ def spawn_closure(roots: set[str], parent_of: dict[str, str]) -> set[str]:
     return dead
 
 
-def _probe_topology(workflow: Workflow, channel: str, port: int | None) -> dict[str, str]:
+def _probe_topology(workflow: Workflow, channel: str, port: int | None,
+                    run_id: str | None = None) -> dict[str, str]:
     """Run the workflow once (baseline, no ablation) to observe its spawn topology
-    (child name -> parent name), used to build the ablation closure."""
+    (child name -> parent name), used to build the ablation closure. `run_id` pins
+    the probe to the re-run batch's BASE id so its siblings nest under it in Logs."""
     async def drive() -> dict[str, str]:
-        s = Session(name="rerun-probe", port=port, autostart_relay=False, dry_run=True)
+        s = Session(name="rerun-probe", port=port, autostart_relay=False, dry_run=True, run_id=run_id)
         await s.connect(wait_timeout=0)
         try:
             await workflow(s)
@@ -57,7 +60,7 @@ def _probe_topology(workflow: Workflow, channel: str, port: int | None) -> dict[
 
 
 def _run_once(workflow: Workflow, ablated: set[str], channel: str, port: int | None,
-              sample: int = 0) -> float | None:
+              sample: int = 0, baseline_run_id: str | None = None) -> float | None:
     """Re-execute the workflow with `ablated` agents neutralized; return the terminal
     reward, or None if the run produced NO measured outcome on `channel` (a dropped
     sample — never silently treated as 0.0, which would pollute v(N)).
@@ -68,7 +71,7 @@ def _run_once(workflow: Workflow, ablated: set[str], channel: str, port: int | N
     variation survives — giving honest confidence intervals."""
     async def drive() -> float | None:
         s = Session(name=f"rerun ablate={sorted(ablated) or 'none'}", port=port,
-                    autostart_relay=False, dry_run=True)
+                    autostart_relay=False, dry_run=True, baseline_run_id=baseline_run_id)
         s._ablated = set(ablated)
         s.sample = sample
         await s.connect(wait_timeout=0)        # headless: reward is captured locally
@@ -98,10 +101,15 @@ def measure_credit_by_rerun(
 ) -> list[CounterfactualResult]:
     all_names = set(agent_names)
 
+    # One BASE run id for this whole re-run batch: the probe is pinned to it, and
+    # every sibling re-run (gate, ablations, credit-report) carries it as
+    # baseline_run_id so they nest under the base run in the Logs panel.
+    base_run_id = str(uuid.uuid4())
+
     # Acceptance gate: the baseline grand coalition must produce a reliably MEASURED
     # reward, or we refuse to ground credit on it (honest-unknown over confidently-wrong).
     measured = sum(1 for _ in range(gate_samples)
-                   if _run_once(workflow, set(), channel, port) is not None)
+                   if _run_once(workflow, set(), channel, port, baseline_run_id=base_run_id) is not None)
     if measured / gate_samples < gate_fraction:
         raise RerunRefused(
             f"baseline reward on channel '{channel}' is absent or flaky "
@@ -111,14 +119,14 @@ def measure_credit_by_rerun(
 
     # Spawn-closure: ablating an agent also ablates the cascade it would spawn (§3.2).
     # Built from the baseline topology and ablated by NAME (robust to re-parenting).
-    parent_of = _probe_topology(workflow, channel, port)
+    parent_of = _probe_topology(workflow, channel, port, run_id=base_run_id)
 
     def live_set_for(removed, names):
         return set(names) - spawn_closure({removed}, parent_of)
 
     def v_fn(live_set, sample):
         ablated = all_names - set(live_set)
-        r = _run_once(workflow, ablated, channel, port, sample)   # CRN: same sample both sides
+        r = _run_once(workflow, ablated, channel, port, sample, baseline_run_id=base_run_id)   # CRN: same sample both sides
         if r is None:
             # a coalition dropped its reward post-gate — fail loudly, never fake a 0.0
             raise RerunRefused(
@@ -132,7 +140,7 @@ def measure_credit_by_rerun(
 
     if publish:
         async def _publish() -> None:
-            s = Session(name="credit-report", port=port, autostart_relay=False)
+            s = Session(name="credit-report", port=port, autostart_relay=False, baseline_run_id=base_run_id)
             await s.connect(wait_timeout=1.0)
             try:
                 await s.report_credit(method=method, channel=channel, agents=[{
