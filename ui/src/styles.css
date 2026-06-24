@@ -1376,3 +1376,38 @@ textarea, input { cursor: text; }
 .logs-outcome.ok { color: var(--c-done); }
 .logs-outcome.bad { color: var(--c-err); }
 .run-empty { padding: 14px; font-size: var(--fs-small); color: var(--ink-faint); }
+
+/* ---- v2: Filesystem view (FILES) — directory treemap of touched files ---- */
+.stage-files { position: absolute; inset: 0; overflow: hidden; }
+.fs-head {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; z-index: 5;
+  font-size: var(--fs-micro); letter-spacing: var(--track-ui); color: var(--ink-dim);
+  background: var(--glass-heavy); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 5px 12px; backdrop-filter: blur(8px);
+}
+.fs-root { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: var(--track-label); color: var(--ink); }
+.fs-stat { color: var(--ink-faint); }
+.fs-legend { display: flex; align-items: center; gap: 5px; color: var(--ink-faint); }
+.fs-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.fs-swatch.read { background: var(--c-msg); }
+.fs-swatch.write { background: var(--c-wait); }
+.fs-svg { display: block; }
+.fs-dir { fill: none; stroke: var(--line); stroke-width: 1; }
+.fs-dir-label {
+  fill: var(--ink-faint); font-family: var(--font-display); font-size: 9px;
+  letter-spacing: var(--track-ui); text-transform: uppercase; pointer-events: none;
+}
+.fs-tile { cursor: pointer; }
+.fs-rect { stroke: var(--surface-1); stroke-width: 1; }
+.fs-rect.read { fill: var(--c-msg); }
+.fs-rect.write { fill: var(--c-wait); }
+.fs-tile:hover .fs-rect { stroke: var(--ink); stroke-width: 1.5; }
+.fs-file-label {
+  fill: #fff; font-family: var(--font-mono); font-size: 9px; pointer-events: none;
+  paint-order: stroke; stroke: rgba(0, 0, 0, 0.45); stroke-width: 2px; stroke-linejoin: round;
+}
+.fs-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--ink-faint); font-size: var(--fs-small); letter-spacing: var(--track-ui);
+}

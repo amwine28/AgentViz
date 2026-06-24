@@ -15,6 +15,7 @@ import { SettingsMenu } from "./components/SettingsMenu";
 import { loadTheme, applyTheme, otherTheme, type Theme } from "./theme/theme";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
+import { FileSystemView } from "./components/FileSystemView";
 import { LogsPanel } from "./components/LogsPanel";
 import { AnalyticsPanel } from "./components/analytics/AnalyticsPanel";
 import { getAnalytics, setDock, toggleSection, type AnalyticsMap } from "./components/analytics/analyticsState";
@@ -178,6 +179,8 @@ export function App() {
             agents={world.agents}
             onSelectNode={selectNode}
           />
+        ) : view === "files" ? (
+          <FileSystemView agents={world.agents} onSelectNode={selectNode} />
         ) : (
           <div className="stage-2d">
             <Graph

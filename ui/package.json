@@ -8,11 +8,13 @@
   },
   "dependencies": {
     "@types/d3-drag": "^3.0.7",
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-zoom": "^3.0.8",
     "3d-force-graph": "^1.80.0",
     "d3-drag": "^3.0.0",
     "d3-force": "^3.0.0",
+    "d3-hierarchy": "^3.1.2",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
     "react": "^18.2.0",

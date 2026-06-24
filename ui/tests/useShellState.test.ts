@@ -22,8 +22,8 @@ describe("useShellState helpers", () => {
     expect(getShell(m, "A")).toEqual({ view: "flow", funMode: true });
   });
 
-  it("cycleView walks 3d -> 2d -> flow -> 3d (credit/ops moved to the analytics panel)", () => {
-    const seq: ViewMode[] = ["3d", "2d", "flow"];
-    expect(seq.map(cycleView)).toEqual(["2d", "flow", "3d"]);
+  it("cycleView walks 3d -> 2d -> flow -> files -> 3d (credit/ops live in the analytics panel)", () => {
+    const seq: ViewMode[] = ["3d", "2d", "flow", "files"];
+    expect(seq.map(cycleView)).toEqual(["2d", "flow", "files", "3d"]);
   });
 });

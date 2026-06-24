@@ -1,7 +1,7 @@
 export type AgentStatus = "running" | "waiting" | "complete" | "error" | "paused";
 // v2: the live "views" are spatial/temporal only. CREDIT + OPS moved into the
 // Analytics panel (they're computed insight, not a way to look at the world).
-export type ViewMode = "3d" | "2d" | "flow";
+export type ViewMode = "3d" | "2d" | "flow" | "files";
 export type EventKind =
   | "session_start" | "agent_spawn" | "agent_status" | "tool_call_pending"
   | "tool_result" | "tool_denied" | "agent_message" | "log" | "agent_complete"

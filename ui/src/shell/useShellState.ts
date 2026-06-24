@@ -27,5 +27,5 @@ export function setShellFun(map: ShellMap, id: string, funMode: boolean): ShellM
 
 // V cycles the spatial/temporal views. CREDIT/OPS now live in the Analytics panel.
 export function cycleView(v: ViewMode): ViewMode {
-  return v === "3d" ? "2d" : v === "2d" ? "flow" : "3d";
+  return v === "3d" ? "2d" : v === "2d" ? "flow" : v === "flow" ? "files" : "3d";
 }

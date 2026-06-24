@@ -5,6 +5,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "3d", label: "3D" },
   { id: "2d", label: "2D" },
   { id: "flow", label: "FLOW" },
+  { id: "files", label: "FILES" },
 ];
 
 // The view switcher — lives in the top bar (chrome), so it never covers the
