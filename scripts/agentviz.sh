@@ -124,10 +124,17 @@ echo "[agentviz] live 3D world: $URL"
 CHROME_APP="/Applications/Google Chrome.app"
 if [ "$NO_BROWSER" != 1 ] && [ -z "$AGENTVIZ_NO_BROWSER" ]; then
   if [ "$APP_WINDOW" = 1 ] && [ -d "$CHROME_APP" ]; then
-    open -na "$CHROME_APP" --args \
-      --app="$URL" \
-      --user-data-dir="$HOME/.agentviz/app-profile" \
-      --no-first-run --no-default-browser-check 2>/dev/null || open "$URL" 2>/dev/null || true
+    # Don't spawn a second app window if one is already open (e.g. AgentViz.app
+    # or a prior `agentviz` already opened it) — the registration alone makes the
+    # new terminal appear in the existing window.
+    if pgrep -f -- "--app=http://localhost:$PORT" >/dev/null 2>&1; then
+      echo "[agentviz] app window already open"
+    else
+      open -na "$CHROME_APP" --args \
+        --app="$URL" \
+        --user-data-dir="$HOME/.agentviz/app-profile" \
+        --no-first-run --no-default-browser-check 2>/dev/null || open "$URL" 2>/dev/null || true
+    fi
   else
     open "$URL" 2>/dev/null || true
   fi

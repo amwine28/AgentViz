@@ -61,12 +61,23 @@ agentviz() {
   esac
 
   # Opt in: stable per-terminal id, register the tab + a "shell" agent, and open
-  # the AgentViz window (bootstrapping the relay/UI if needed).
+  # the AgentViz APP WINDOW (chromeless, --app-window — not a browser tab).
   [ -z "$AGENTVIZ_SESSION" ] && export AGENTVIZ_SESSION="term-${HOST%%.*}-$$-${RANDOM}"
   export AGENTVIZ_ON=1
   ( "$_AGENTVIZ_ATTACH" attach "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
-  ( "$_AGENTVIZ_LAUNCH" >/dev/null 2>&1 & ) 2>/dev/null   # ensures relay + opens/focuses the window
-  echo "agentviz: streaming this terminal → it now appears as a tab in the AgentViz window."
+
+  # If a Claude Code session is ALREADY running in this dir (you ran `agentviz`
+  # mid-workflow), pick it up now — tail its in-progress transcript. preexec only
+  # catches NEW `claude` launches, so without this an in-flight run shows nothing.
+  local _proj="$HOME/.claude/projects/${PWD//[^A-Za-z0-9]/-}"
+  local _t; _t="$(ls -t "$_proj"/*.jsonl 2>/dev/null | head -1)"
+  if [ -n "$_t" ] && [ $(( ${EPOCHSECONDS:-$(date +%s)} - $(stat -f %m "$_t" 2>/dev/null || echo 0) )) -lt 180 ]; then
+    export AGENTVIZ_CC=1
+    ( "$_AGENTVIZ_ATTACH" tail-cc "$AGENTVIZ_SESSION" "${PWD:t}" "$PWD" >/dev/null 2>&1 & ) 2>/dev/null
+  fi
+
+  ( "$_AGENTVIZ_LAUNCH" --app-window >/dev/null 2>&1 & ) 2>/dev/null   # relay up + chromeless app window
+  echo "agentviz: streaming this terminal → it appears as a tab in the AgentViz app window."
 }
 
 # Hooks below are INERT unless this terminal opted in (AGENTVIZ_ON set).
