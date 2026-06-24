@@ -167,7 +167,11 @@ export function Graph({ agents, messageEdges, operations, selectedNodeId, onSele
     const nodeEls = nodes.map((node) => {
       const agent = agents[node.id];
       const root = isRoot(node.id);
-      const color = root ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? "#8b9bb4");
+      // A root shows its live status color when active (running/waiting/error) so
+      // a lone shell/orchestrator node doesn't look idle; ROOT_COLOR is reserved
+      // for structurally-idle roots (complete/paused). Matches the 3D field.
+      const active = agent.status === "running" || agent.status === "waiting" || agent.status === "error";
+      const color = (root && !active) ? ROOT_COLOR : (STATUS_COLORS[agent.status] ?? ROOT_COLOR);
       const r = radiusOf(node.id);
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
