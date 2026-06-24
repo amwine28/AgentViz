@@ -40,6 +40,12 @@ emit() { # $1 = JSON event — fire-and-forget, never blocks the caller
 project_dir() { printf '%s/.claude/projects/%s' "$HOME" "$(printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g')"; }
 
 case "$SUB" in
+  ensure)
+    # Bring the relay up (blocks until it's listening) — used by the shell hook's
+    # self-healing path when it finds the relay missing/dead.
+    ensure_relay
+    ;;
+
   attach)
     SID="$2"; NAME="$3"; CWD="${4:-$PWD}"
     [ -z "$SID" ] && exit 0

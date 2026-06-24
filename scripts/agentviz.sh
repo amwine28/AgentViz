@@ -122,18 +122,24 @@ echo "[agentviz] live 3D world: $URL"
 # profile — no tabs/address bar, its own Dock tile — so AgentViz reads as a
 # standalone app. Falls back to a normal browser tab if Chrome isn't installed.
 CHROME_APP="/Applications/Google Chrome.app"
+CHROME_BIN="$CHROME_APP/Contents/MacOS/Google Chrome"
+APP_PROFILE="$HOME/.agentviz/app-profile"
 if [ "$NO_BROWSER" != 1 ] && [ -z "$AGENTVIZ_NO_BROWSER" ]; then
-  if [ "$APP_WINDOW" = 1 ] && [ -d "$CHROME_APP" ]; then
-    # Don't spawn a second app window if one is already open (e.g. AgentViz.app
-    # or a prior `agentviz` already opened it) — the registration alone makes the
-    # new terminal appear in the existing window.
-    if pgrep -f -- "--app=http://localhost:$PORT" >/dev/null 2>&1; then
+  if [ "$APP_WINDOW" = 1 ] && [ -x "$CHROME_BIN" ]; then
+    # Don't spawn a second window if the AgentViz app window is already open —
+    # key the dedup on the DEDICATED profile (not the URL), and only count a
+    # process that actually holds that profile.
+    if pgrep -f -- "--user-data-dir=$APP_PROFILE" >/dev/null 2>&1; then
       echo "[agentviz] app window already open"
     else
-      open -na "$CHROME_APP" --args \
-        --app="$URL" \
-        --user-data-dir="$HOME/.agentviz/app-profile" \
-        --no-first-run --no-default-browser-check 2>/dev/null || open "$URL" 2>/dev/null || true
+      # Launch the Chrome BINARY directly (NOT `open`): `open -na` gets coalesced
+      # by LaunchServices into the user's running Chrome as a normal TAB, dropping
+      # --app/--user-data-dir. A direct binary launch with its own profile starts a
+      # separate, chromeless instance — a real app window — every time.
+      "$CHROME_BIN" --app="$URL" \
+        --user-data-dir="$APP_PROFILE" \
+        --no-first-run --no-default-browser-check >/dev/null 2>&1 &
+      disown 2>/dev/null || true
     fi
   else
     open "$URL" 2>/dev/null || true
