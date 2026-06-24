@@ -15,7 +15,7 @@ import { SettingsMenu } from "./components/SettingsMenu";
 import { loadTheme, applyTheme, otherTheme, type Theme } from "./theme/theme";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import { FlowView } from "./components/FlowView";
-import { RunPicker } from "./components/RunPicker";
+import { LogsPanel } from "./components/LogsPanel";
 import { AnalyticsPanel } from "./components/analytics/AnalyticsPanel";
 import { getAnalytics, setDock, toggleSection, type AnalyticsMap } from "./components/analytics/analyticsState";
 import type { ViewMode, AgentVizEvent } from "./types";
@@ -36,7 +36,7 @@ export function App() {
   const [state, dispatch] = useReducer(rootReducer, initialMultiState);
   const world = activeWorld(state) ?? emptyWorld();
 
-  const [showRuns, setShowRuns] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);   // the Logs side panel (left rail when closed)
   const [shell, setShell] = useState<ShellMap>({});
   const [analytics, setAnalytics] = useState<AnalyticsMap>({});
   const [theme, setTheme] = useState<Theme>(loadTheme);
@@ -115,13 +115,13 @@ export function App() {
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (showRuns) setShowRuns(false);
+      if (logsOpen) setLogsOpen(false);
       else if (world.selectedNodeId) selectNode(null);
       else if (world.selectedEdgeKey) selectEdge(null);
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [showRuns, world.selectedNodeId, world.selectedEdgeKey, selectNode, selectEdge]);
+  }, [logsOpen, world.selectedNodeId, world.selectedEdgeKey, selectNode, selectEdge]);
 
   const agentList = Object.values(world.agents);
   const runningCount = agentList.filter((a) => a.status === "running").length;
@@ -148,7 +148,7 @@ export function App() {
         eventCount={world.eventCount}
         droppedCount={world.droppedCount}
         dryRun={world.dryRun}
-        onOpenRuns={() => setShowRuns(true)}
+        onOpenRuns={() => setLogsOpen((o) => !o)}
       >
         <ViewSwitch
           view={view}
@@ -228,9 +228,7 @@ export function App() {
 
         <ApprovalQueue agents={world.agents} acks={world.acks} onCommand={sendCommand} />
 
-        {showRuns && (
-          <RunPicker port={RELAY_PORT} onLoad={loadRun} onClose={() => setShowRuns(false)} />
-        )}
+        <LogsPanel port={RELAY_PORT} open={logsOpen} onSetOpen={setLogsOpen} onLoad={loadRun} />
 
         {(view === "3d" || view === "2d") && (
           <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>

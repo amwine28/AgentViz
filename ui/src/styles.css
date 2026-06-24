@@ -1312,3 +1312,67 @@ textarea, input { cursor: text; }
 
 /* dry-run / mock tool result marker (NodeDetailPanel) */
 .tc-mock { color: #b78bff; font-weight: 600; }
+
+/* ---- v2: Logs panel (LEFT edge, dockable) — recorded/finished runs -------- */
+.logs-rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  padding: 14px 5px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.logs-rail:hover { color: var(--ink); border-color: var(--line-bright); background: var(--surface-3); }
+.logs-rail-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.logs-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  width: 300px;
+  z-index: 38;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.logs-body { flex: 1; overflow-y: auto; }
+.logs-group { border-bottom: 1px solid var(--line); }
+.logs-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--ink);
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.logs-row:hover { background: rgba(var(--line-rgb), 0.06); }
+.logs-row.child { padding-left: 28px; }
+.logs-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.logs-dot.done { background: var(--c-done); }
+.logs-dot.live { background: var(--c-run); box-shadow: 0 0 6px var(--c-run); }
+.logs-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.logs-name { font-size: var(--fs-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logs-meta { font-size: var(--fs-micro); color: var(--ink-faint); letter-spacing: var(--track-ui); }
+.logs-outcome { font-size: var(--fs-small); font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.logs-outcome.ok { color: var(--c-done); }
+.logs-outcome.bad { color: var(--c-err); }
+.run-empty { padding: 14px; font-size: var(--fs-small); color: var(--ink-faint); }
