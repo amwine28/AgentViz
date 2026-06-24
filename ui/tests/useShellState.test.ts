@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getShell, setShellView, setShellFun, cycleView, defaultShellUi } from "../src/shell/useShellState";
+import { getShell, setShellView, cycleView, defaultShellUi } from "../src/shell/useShellState";
 import type { ViewMode } from "../src/types";
 
 describe("useShellState helpers", () => {
   it("getShell returns the default for an unknown/null id", () => {
-    expect(getShell({}, null)).toEqual({ view: "3d", funMode: false });
+    expect(getShell({}, null)).toEqual({ view: "3d" });
     expect(getShell({}, "x")).toEqual(defaultShellUi());
   });
 
@@ -15,11 +15,6 @@ describe("useShellState helpers", () => {
     const m2 = setShellView(m, "B", "flow");
     expect(getShell(m2, "A").view).toBe("2d");
     expect(getShell(m2, "B").view).toBe("flow");
-  });
-
-  it("setShellFun toggles per-id, preserving the tab's view", () => {
-    const m = setShellFun(setShellView({}, "A", "flow"), "A", true);
-    expect(getShell(m, "A")).toEqual({ view: "flow", funMode: true });
   });
 
   it("cycleView walks 3d -> 2d -> flow -> files -> 3d (credit/ops live in the analytics panel)", () => {

@@ -319,21 +319,6 @@ textarea, input { cursor: text; }
 .hud-btn:hover { color: var(--ink); border-color: var(--line-bright); background: rgba(var(--line-rgb), 0.06); }
 .hud-btn.danger:hover { color: var(--c-destructive); border-color: rgba(224, 86, 111, 0.6); background: rgba(224, 86, 111, 0.07); }
 
-/* HYPERDRIVE toggle — quiet at rest, gleefully unhinged when armed */
-.hud-btn.fun { letter-spacing: var(--track-ui); }
-.hud-btn.fun:hover { color: #b78bff; border-color: rgba(138, 92, 255, 0.6); background: rgba(138, 92, 255, 0.08); }
-.hud-btn.fun.active {
-  color: #fff;
-  border-color: transparent;
-  background: linear-gradient(90deg, rgba(255, 45, 149, 0.3), rgba(var(--accent-rgb), 0.3), rgba(138, 92, 255, 0.3));
-  box-shadow: 0 0 16px rgba(138, 92, 255, 0.55), inset 0 0 10px rgba(var(--accent-rgb), 0.25);
-  animation: fun-pulse 1.5s ease-in-out infinite;
-}
-@keyframes fun-pulse {
-  0%, 100% { filter: hue-rotate(0deg); }
-  50% { filter: hue-rotate(50deg); }
-}
-
 /* view toggle — a physical-feeling switch */
 .view-toggle {
   display: flex;

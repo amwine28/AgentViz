@@ -11,13 +11,12 @@ interface Props {
   messageEdges: Record<string, MessageEdge>;
   operations: Map<string, OperationState>;
   selectedNodeId: string | null;
-  funMode: boolean;
   theme: Theme;
   onSelectNode: (id: string | null) => void;
 }
 
 // The 3D field follows the theme: a clean paper canvas in light (no resting
-// glow — Hyperdrive is the opt-in spectacle), the deep void in dark.
+// glow), the deep void in dark.
 const FIELD_BG: Record<Theme, string> = { light: "#e9e5db", dark: "#04060d" };
 const RESTING_BLOOM: Record<Theme, number> = { light: 0.05, dark: 0.3 };
 
@@ -48,9 +47,6 @@ const HALO_OPACITY: Record<Theme, { sel: number; base: number }> = {
   light: { sel: 0.22, base: 0.0 },
 };
 
-// HYPERDRIVE palette — saturated neon for the fun-mode particle storm
-const NEON = ["#ff2d95", "#3fe0ff", "#ffe14d", "#8a5cff", "#34ff9e", "#ff7a3d"];
-
 interface VizNode {
   id: string;
   name: string;
@@ -75,7 +71,6 @@ interface NodeVisual {
   badge: THREE.Sprite | null; // live-operation glyph; null = node owns no live op
   badgeType: string | null;   // op_type currently shown (so we know when to rebuild)
   status: string;
-  hue: number; // stable per-node hue offset for fun mode
 }
 
 /* radial-gradient halo — inner stop pulled off pure-white so the status hue
@@ -201,7 +196,7 @@ function makeStarfield(): THREE.Points {
   return new THREE.Points(geo, mat);
 }
 
-export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funMode, theme, onSelectNode }: Props) {
+export function Scene3D({ agents, messageEdges, operations, selectedNodeId, theme, onSelectNode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraph3DInstance<VizNode, VizLink> | null>(null);
   const dataRef = useRef<{ nodes: VizNode[]; links: VizLink[] }>({ nodes: [], links: [] });
@@ -218,7 +213,6 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
   selectedRef.current = selectedNodeId;
   const operationsRef = useRef(operations);
   operationsRef.current = operations;
-  const funRef = useRef(funMode);
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const hoverRef = useRef<string | null>(null);
@@ -272,7 +266,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
 
         visuals.set(n.id, {
           group, core, halo, ring, label, labelText, badge, badgeType: b?.op_type ?? null,
-          status: n.status, hue: Math.random(),
+          status: n.status,
         });
         return group;
       })
@@ -330,12 +324,12 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       controls.zoomSpeed = 0.9;
       controls.minDistance = 40;
       controls.maxDistance = 1200;
-      controls.addEventListener?.("start", () => { if (!funRef.current) controls.autoRotate = false; });
+      controls.addEventListener?.("start", () => { controls.autoRotate = false; });
     }
     // OrbitControls' "start" doesn't fire on wheel-zoom, so autoRotate keeps
     // spinning and fights the user as they scroll to zoom. Halt it on the first
-    // wheel/pointer gesture (Hyperdrive owns rotation, so leave it alone there).
-    const stopAutoRotate = () => { if (controls && !funRef.current) controls.autoRotate = false; };
+    // wheel/pointer gesture too.
+    const stopAutoRotate = () => { if (controls) controls.autoRotate = false; };
     el.addEventListener("wheel", stopAutoRotate, { passive: true });
     el.addEventListener("pointerdown", stopAutoRotate);
 
@@ -344,41 +338,21 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     const animate = () => {
       const t = performance.now() / 1000;
       const cam = graph.camera();
-      const fun = funRef.current;
       const W = el.clientWidth, H = el.clientHeight;
 
-      // ---- HYPERDRIVE: rainbow throb, supernova bloom, spinning sky ----
-      if (fun) {
-        if (bloomRef.current) bloomRef.current.strength = 2.0 + 0.7 * Math.sin(t * 3);
-        if (starfieldRef.current) {
-          starfieldRef.current.rotation.y += 0.004;
-          starfieldRef.current.rotation.x += 0.0015;
-        }
-      }
-
-      // ---- label declutter: project to screen, greedily hide overlaps ----
+      // ---- label declutter: project to screen, hide all but hover/selected ----
       const items: { v: NodeVisual; id: string; sx: number; sy: number; dist: number; infront: boolean; pri: number }[] = [];
       for (const [id, v] of visuals) {
-        // fun-mode node theatrics
-        if (fun) {
-          const hue = (t * 0.12 + v.hue) % 1;
-          const col = new THREE.Color().setHSL(hue, 1, 0.6);
-          v.core.material.color = col;
-          v.halo.material.color = col;
-          const hs = 16 + 5 * Math.sin(t * 4 + v.hue * 7);
+        // resting node motion: pulse the approval ring + the running halo
+        if (v.ring.visible) {
+          const s = 1 + 0.18 * Math.sin(t * 4.2);
+          v.ring.scale.set(s, s, s);
+          v.ring.material.opacity = 0.65 + 0.35 * Math.sin(t * 4.2);
+          v.ring.lookAt(cam.position);
+        }
+        if (v.status === "running") {
+          const hs = 14 + 1.6 * Math.sin(t * 2.1);
           v.halo.scale.set(hs, hs, 1);
-          v.core.scale.setScalar(1.2 + 0.35 * Math.sin(t * 6 + v.hue * 9));
-        } else {
-          if (v.ring.visible) {
-            const s = 1 + 0.18 * Math.sin(t * 4.2);
-            v.ring.scale.set(s, s, s);
-            v.ring.material.opacity = 0.65 + 0.35 * Math.sin(t * 4.2);
-            v.ring.lookAt(cam.position);
-          }
-          if (v.status === "running") {
-            const hs = 14 + 1.6 * Math.sin(t * 2.1);
-            v.halo.scale.set(hs, hs, 1);
-          }
         }
 
         v.group.getWorldPosition(proj);
@@ -399,7 +373,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       // into an unreadable wall over the nodes. The field now shows clean nodes;
       // hover any node (or select it) to reveal its name.
       for (const it of items) {
-        it.v.label.visible = !fun && it.infront
+        it.v.label.visible = it.infront
           && (it.id === hoverRef.current || it.id === selectedRef.current);
       }
 
@@ -426,40 +400,6 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     };
   }, []);
 
-  /* ---- HYPERDRIVE toggle: flip the scene-wide knobs, restore on exit ---- */
-  useEffect(() => {
-    funRef.current = funMode;
-    const graph = graphRef.current;
-    const bloom = bloomRef.current;
-    const controls = controlsRef.current;
-    if (!graph) return;
-
-    if (funMode) {
-      if (bloom) { bloom.radius = 0.9; bloom.strength = 2.0; }
-      if (controls) { controls.autoRotate = true; controls.autoRotateSpeed = 6.5; }
-      graph.linkOpacity(0.85)
-        .linkDirectionalParticles(5)
-        .linkDirectionalParticleSpeed(0.05)
-        .linkDirectionalParticleWidth(3.4)
-        .linkDirectionalParticleColor(() => NEON[Math.floor(Math.random() * NEON.length)]);
-    } else {
-      if (bloom) { bloom.radius = 0.25; bloom.strength = RESTING_BLOOM[themeRef.current]; }
-      if (controls) { controls.autoRotateSpeed = 0.45; }
-      graph.linkOpacity(0.35)
-        .linkDirectionalParticles(0)
-        .linkDirectionalParticleSpeed(0.012)
-        .linkDirectionalParticleWidth(2.4)
-        .linkDirectionalParticleColor(() => "#7df3ff");
-      // restore status colors + resting scales the fun loop overrode
-      for (const v of visualsRef.current.values()) {
-        const color = new THREE.Color(statusColor(v.status, themeRef.current));
-        v.core.material.color = color;
-        v.halo.material.color = color;
-        v.core.scale.setScalar(1);
-        v.halo.scale.set(14, 14, 1);
-      }
-    }
-  }, [funMode]);
 
   /* ---- theme: repaint the field, drop the resting glow + starfield in light ---- */
   useEffect(() => {
@@ -468,19 +408,16 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     if (!graph) return;
     graph.backgroundColor(FIELD_BG[theme]);
     if (starfieldRef.current) starfieldRef.current.visible = theme === "dark";
-    // Hyperdrive owns the bloom while it's on; otherwise track the theme's resting glow.
-    if (bloomRef.current && !funRef.current) bloomRef.current.strength = RESTING_BLOOM[theme];
+    if (bloomRef.current) bloomRef.current.strength = RESTING_BLOOM[theme];
     // Recolor nodes for the new theme: darker status colors + near-off halos on
     // light (the phosphor palette + glowing halos white-out the cream field), and
     // repaint label/badge plates (dark plates floated on light paper).
     const haloOp = HALO_OPACITY[theme];
     for (const [id, v] of visualsRef.current) {
-      if (!funRef.current) {
-        const color = new THREE.Color(statusColor(v.status, theme));
-        v.core.material.color = color;
-        v.halo.material.color = color;
-        v.halo.material.opacity = id === selectedRef.current ? haloOp.sel : haloOp.base;
-      }
+      const color = new THREE.Color(statusColor(v.status, theme));
+      v.core.material.color = color;
+      v.halo.material.color = color;
+      v.halo.material.opacity = id === selectedRef.current ? haloOp.sel : haloOp.base;
       v.group.remove(v.label);
       v.label.material.map?.dispose();
       v.label.material.dispose();
@@ -549,12 +486,10 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
       v.ring.visible = pending;
       if (v.status !== a.status) {
         v.status = a.status;
-        if (!funRef.current) {
-          const color = new THREE.Color(statusColor(a.status, themeRef.current));
-          v.core.material.color = color;
-          v.halo.material.color = color;
-          if (a.status !== "running") v.halo.scale.set(14, 14, 1);
-        }
+        const color = new THREE.Color(statusColor(a.status, themeRef.current));
+        v.core.material.color = color;
+        v.halo.material.color = color;
+        if (a.status !== "running") v.halo.scale.set(14, 14, 1);
       }
     }
 
@@ -597,7 +532,7 @@ export function Scene3D({ agents, messageEdges, operations, selectedNodeId, funM
     const op = HALO_OPACITY[themeRef.current];
     for (const [id, v] of visualsRef.current) {
       const selected = id === selectedNodeId;
-      if (!funRef.current) v.core.scale.setScalar(selected ? 1.45 : 1);
+      v.core.scale.setScalar(selected ? 1.45 : 1);
       // halos are a dark-field glow — near-off on light so they don't white-out the canvas
       v.halo.material.opacity = selected ? op.sel : op.base;
     }

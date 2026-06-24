@@ -2,7 +2,7 @@
 import { useReducer, useEffect, useRef, useCallback, useState } from "react";
 import { rootReducer, initialMultiState, activeWorld, sessionTabs } from "./multiStore";
 import { emptyWorld } from "./store";
-import { getShell, setShellView, setShellFun, cycleView, type ShellMap } from "./shell/useShellState";
+import { getShell, setShellView, cycleView, type ShellMap } from "./shell/useShellState";
 import { createWsConnection } from "./ws";
 import { Graph } from "./components/Graph";
 import { Scene3D } from "./components/Scene3D";
@@ -48,16 +48,14 @@ export function App() {
   // Reflect the chosen theme onto <html data-theme> + persist it.
   useEffect(() => { applyTheme(theme); }, [theme]);
 
-  // Per-tab view + Hyperdrive (each tab remembers its own). Read and write must
-  // use the SAME key — including the "_pending" fallback when there's no active
-  // session yet — or the view switch looks stuck (writes land on a key the read
-  // ignores). getShell(map, null) returns the default, so never read with null.
+  // Per-tab view (each tab remembers its own). Read and write must use the SAME
+  // key — including the "_pending" fallback when there's no active session yet —
+  // or the view switch looks stuck. getShell(map, null) returns the default, so
+  // never read with null.
   const shellKey = state.activeId ?? "_pending";
   const ui = getShell(shell, shellKey);
   const view = ui.view;
-  const funMode = ui.funMode;
   const setView = (v: ViewMode) => setShell((m) => setShellView(m, shellKey, v));
-  const toggleFun = () => setShell((m) => setShellFun(m, shellKey, !getShell(m, shellKey).funMode));
   const analyticsUi = getAnalytics(analytics, shellKey);
 
   const tabs = sessionTabs(state);
@@ -77,14 +75,12 @@ export function App() {
     return conn.cleanup;
   }, []);
 
-  // V cycles the active tab's view; F toggles Hyperdrive. Re-bound on tab switch.
+  // V cycles the active tab's view. Re-bound on tab switch.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
       const id = state.activeId ?? "_pending";
-      const k = e.key.toLowerCase();
-      if (k === "v") setShell((m) => setShellView(m, id, cycleView(getShell(m, id).view)));
-      else if (k === "f") setShell((m) => setShellFun(m, id, !getShell(m, id).funMode));
+      if (e.key.toLowerCase() === "v") setShell((m) => setShellView(m, id, cycleView(getShell(m, id).view)));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -171,8 +167,6 @@ export function App() {
         <ViewSwitch
           view={view}
           onSetView={setView}
-          funMode={funMode}
-          onToggleFun={toggleFun}
           theme={theme}
           onToggleTheme={() => setTheme((t) => otherTheme(t))}
         />
@@ -186,7 +180,6 @@ export function App() {
             messageEdges={world.messageEdges}
             operations={world.operations}
             selectedNodeId={world.selectedNodeId}
-            funMode={funMode}
             theme={theme}
             onSelectNode={selectNode}
           />

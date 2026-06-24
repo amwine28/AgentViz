@@ -13,15 +13,11 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 export function ViewSwitch({
   view,
   onSetView,
-  funMode,
-  onToggleFun,
   theme,
   onToggleTheme,
 }: {
   view: ViewMode;
   onSetView: (v: ViewMode) => void;
-  funMode: boolean;
-  onToggleFun: () => void;
   theme: Theme;
   onToggleTheme: () => void;
 }) {
@@ -47,15 +43,7 @@ export function ViewSwitch({
           title="Night sky — dark 3D field with a live starfield"
         >{theme === "dark" ? "☾ Night" : "☼ Day"}</button>
       )}
-      {view === "3d" && (
-        <button
-          className={`hud-btn fun ${funMode ? "active" : ""}`}
-          onClick={onToggleFun}
-          aria-pressed={funMode}
-          title="HYPERDRIVE — unleash the 3D world (F)"
-        >✦ Hyperdrive</button>
-      )}
-      <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW">[V]</span>
+      <span className="hotkey-hint" title="V — cycle 3D / 2D / FLOW / FILES">[V]</span>
     </div>
   );
 }
