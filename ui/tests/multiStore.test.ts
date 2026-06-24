@@ -84,6 +84,26 @@ describe("multiStore", () => {
     expect(s.closed.has("A")).toBe(false);
   });
 
+  it("a terminal outcome marks the session finished (→ auto-archive); a fresh start clears it", () => {
+    let s = feed(initialMultiState,
+      ev({ kind: "session_start", name: "A", session_id: "A", timestamp: 1 }),
+      ev({ kind: "agent_spawn", agent_id: "a1", name: "x", parent_id: null, session_id: "A", timestamp: 2 }),
+    );
+    expect(s.finished.has("A")).toBe(false);
+    // run-level (agent_id null) terminal outcome → finished
+    s = feed(s, ev({ kind: "outcome", agent_id: null, stage: "terminal", value: 1, detail: {}, session_id: "A", timestamp: 3 }));
+    expect(s.finished.has("A")).toBe(true);
+    // an intermediate, agent-scoped outcome must NOT mark finished
+    let s2 = feed(initialMultiState,
+      ev({ kind: "session_start", name: "B", session_id: "B", timestamp: 1 }),
+      ev({ kind: "outcome", agent_id: "b1", stage: "intermediate", value: 0.5, detail: {}, session_id: "B", timestamp: 2 }),
+    );
+    expect(s2.finished.has("B")).toBe(false);
+    // a fresh session_start re-opens (clears finished)
+    s = feed(s, ev({ kind: "session_start", name: "A2", session_id: "A", timestamp: 4 }));
+    expect(s.finished.has("A")).toBe(false);
+  });
+
   it("sessionTabs reflects order, labels and status", () => {
     let s = feed(initialMultiState,
       ev({ kind: "session_start", name: "Run A", session_id: "A", timestamp: 1 }),

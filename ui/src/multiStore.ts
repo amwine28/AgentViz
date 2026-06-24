@@ -15,6 +15,7 @@ export interface MultiState {
   names: Record<string, string>; // auto/user tab-name overrides
   connected: boolean;            // the GLOBAL socket flag (per-session connected is vestigial)
   closed: Set<string>;           // sessions the user dismissed — ignore their stray events
+  finished: Set<string>;         // sessions that emitted a terminal outcome (→ auto-archive)
 }
 
 export const initialMultiState: MultiState = {
@@ -24,6 +25,7 @@ export const initialMultiState: MultiState = {
   names: {},
   connected: false,
   closed: new Set(),
+  finished: new Set(),
 };
 
 export type RootAction =
@@ -56,12 +58,22 @@ function routeEvent(s: MultiState, event: AgentVizEvent): MultiState {
 
   let names = s.names;
   let activeId = s.activeId ?? sid; // first session to appear becomes the active tab
+  let finished = s.finished;
   if (event.kind === "session_start") {
     const start = event as { name?: string; source?: string };
     if (start.name && names[sid] === undefined) names = { ...names, [sid]: start.name };
     // A user explicitly running `agentviz` in a terminal (source=shell) wants to
     // SEE that terminal — focus it, so it isn't hidden behind older/stale tabs.
     if (start.source === "shell") activeId = sid;
+    // a fresh start re-opens a previously-finished session id
+    if (finished.has(sid)) { finished = new Set(finished); finished.delete(sid); }
+  } else if (event.kind === "outcome") {
+    // a run-level / terminal outcome means "this workflow finished" — the grounded
+    // signal the Logs auto-archive watches (App schedules the reset).
+    const o = event as { agent_id?: string | null; stage?: string };
+    if ((o.agent_id == null || o.stage === "terminal") && !finished.has(sid)) {
+      finished = new Set(finished); finished.add(sid);
+    }
   }
 
   return {
@@ -70,6 +82,7 @@ function routeEvent(s: MultiState, event: AgentVizEvent): MultiState {
     order: existed ? s.order : [...s.order, sid],
     activeId,
     names,
+    finished,
   };
 }
 
@@ -102,7 +115,8 @@ export function rootReducer(s: MultiState, action: RootAction): MultiState {
       const order = s.order.filter((id) => id !== action.session_id);
       const activeId = s.activeId === action.session_id ? (order[order.length - 1] ?? null) : s.activeId;
       const closed = new Set(s.closed); closed.add(action.session_id);
-      return { ...s, sessions, order, names, activeId, closed };
+      const finished = new Set(s.finished); finished.delete(action.session_id);
+      return { ...s, sessions, order, names, activeId, closed, finished };
     }
     default:
       return s;

@@ -38,6 +38,8 @@ export function App() {
   const world = activeWorld(state) ?? emptyWorld();
 
   const [logsOpen, setLogsOpen] = useState(false);   // the Logs side panel (left rail when closed)
+  const [logsRefresh, setLogsRefresh] = useState(0); // bump to refetch /runs (on auto-archive)
+  const archivedRef = useRef<Set<string>>(new Set()); // sessions we've auto-archived (dedupe)
   const [shell, setShell] = useState<ShellMap>({});
   const [analytics, setAnalytics] = useState<AnalyticsMap>({});
   const [theme, setTheme] = useState<Theme>(loadTheme);
@@ -87,6 +89,21 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [state.activeId]);
+
+  // Finish → archive + reset: when a session emits a terminal outcome, let the
+  // final state breathe for a moment, then auto-close its tab. The run is already
+  // recorded on disk, so it lands in the Logs panel; the canvas resets to
+  // AWAITING SIGNAL and the next workflow opens fresh. One timer per session.
+  useEffect(() => {
+    for (const sid of state.finished) {
+      if (archivedRef.current.has(sid) || !state.sessions[sid]) continue;
+      archivedRef.current.add(sid);
+      setTimeout(() => {
+        dispatch({ type: "close_session", session_id: sid });
+        setLogsRefresh((n) => n + 1);
+      }, 3000);
+    }
+  }, [state.finished, state.sessions]);
 
   // When the first real session activates, carry over any per-tab UI state the
   // user set on the "_pending" (no-session) screen so it isn't lost.
@@ -231,7 +248,7 @@ export function App() {
 
         <ApprovalQueue agents={world.agents} acks={world.acks} onCommand={sendCommand} />
 
-        <LogsPanel port={RELAY_PORT} open={logsOpen} onSetOpen={setLogsOpen} onLoad={loadRun} />
+        <LogsPanel port={RELAY_PORT} open={logsOpen} onSetOpen={setLogsOpen} onLoad={loadRun} refreshKey={logsRefresh} />
 
         {(view === "3d" || view === "2d") && (
           <div className={`legend panel ${panelOpen ? "shifted" : ""}`}>
